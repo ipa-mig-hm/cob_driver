@@ -167,8 +167,8 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
 
   // check for relevant obstacles
   obstacleHandler();
-  // decompose the volocity when closed to stop threadhold
-  if( closest_obstacle_dist_ < stop_threshold_ *3){
+  // decompose the volocity when close to stop threshold
+  if( closest_obstacle_dist_ < stop_threshold_ *2){
    velocityRecalculation();
    obstacleHandler();  
   }
@@ -178,14 +178,13 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
 
 //velocityRecalculation decomposes and replace the original velocity   
 void CollisionVelocityFilter::velocityRecalculation(){
-  ROS_INFO("closest_obstacle_angle_ is %f",closest_obstacle_angle_);
-  ROS_INFO("robot_twist_linear_.x=%f,robot_twist_linear_.y=%f",robot_twist_linear_.x,robot_twist_linear_.y);
+  ROS_DEBUG("closest_obstacle_angle_ is %f",closest_obstacle_angle_);
+  ROS_DEBUG("robot_twist_linear_.x=%f,robot_twist_linear_.y=%f",robot_twist_linear_.x,robot_twist_linear_.y);
 
   double vel_dis = sqrt(robot_twist_linear_.x*robot_twist_linear_.x + robot_twist_linear_.y*robot_twist_linear_.y);
   double vel_angle = atan2(robot_twist_linear_.y,robot_twist_linear_.x);
   double obstacle_vel_angle = closest_obstacle_angle_ - vel_angle;
   double obstacle_vel_length = vel_dis*fabs(cos(obstacle_vel_angle));
-  //double obstacle_vel_length = vel_dis;
   
   double obstacle_vel_length_x = cos(closest_obstacle_angle_) * obstacle_vel_length;
   double obstacle_vel_length_y = sin(closest_obstacle_angle_) * obstacle_vel_length;
