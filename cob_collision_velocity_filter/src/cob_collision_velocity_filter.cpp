@@ -169,15 +169,15 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   obstacleHandler();
   // decompose the volocity when closed to stop threadhold
   if( closest_obstacle_dist_ < stop_threshold_ *3){
-   VelocityRecalculation();
+   velocityRecalculation();
    obstacleHandler();  
   }
   // stop if we are about to run in an obstacle
   performControllerStep();  
 }
 
-//VelocityRecalculation decomposes and replace the original velocity   
-void CollisionVelocityFilter::VelocityRecalculation(){
+//velocityRecalculation decomposes and replace the original velocity   
+void CollisionVelocityFilter::velocityRecalculation(){
   ROS_INFO("closest_obstacle_angle_ is %f",closest_obstacle_angle_);
   ROS_INFO("robot_twist_linear_.x=%f,robot_twist_linear_.y=%f",robot_twist_linear_.x,robot_twist_linear_.y);
 
@@ -271,7 +271,7 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
 
   if (stop_threshold_ <= 0.0 || influence_radius_ <=0.0)
     ROS_WARN("Turned off obstacle avoidance!");
-pthread_mutex_unlock(&m_mutex);
+  pthread_mutex_unlock(&m_mutex);
 }
 
 // sets corrected velocity of joystick command
@@ -374,14 +374,11 @@ void CollisionVelocityFilter::performControllerStep() {
 
  // if closest obstacle is within stop_threshold, then do not move
   if( closest_obstacle_dist_ < stop_threshold_ ) {
-    ROS_INFO("within stop_threadhold, stop movement");
     stopMovement(); //if obstacle still exists in the direction of decomposed velocity, then stop
     topic_pub_command_.publish(cmd_vel);  
   }
   else
   {  
-    // publish adjusted velocity 
-    ROS_INFO("cmd_x= %f, cmd_y= %f", cmd_vel.linear.x, cmd_vel.linear.y);  
     topic_pub_command_.publish(cmd_vel);   	 	
   }
   return;

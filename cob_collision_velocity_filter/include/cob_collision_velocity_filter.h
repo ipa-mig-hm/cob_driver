@@ -225,9 +225,12 @@ class CollisionVelocityFilter
     double kp_, kv_;
     double vx_last_, vy_last_, vtheta_last_;
     double virt_mass_;
-
+    
     // BUT velocity limited marker
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
+
+    // decomposes and replaces the velocity when closed to the stop threadhold
+    void velocityRecalculation();
 
 }; //CollisionVelocityFilter
 
