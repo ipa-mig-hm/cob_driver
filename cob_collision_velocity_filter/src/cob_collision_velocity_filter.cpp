@@ -58,7 +58,7 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   nh_ = ros::NodeHandle("~");
 
   m_mutex = PTHREAD_MUTEX_INITIALIZER;
-
+  
   // node handle to get footprint from parameter server
   std::string costmap_parameter_source;
   if(!nh_.hasParam("costmap_parameter_source")) ROS_WARN("Checking default source [/local_costmap_node/costmap] for costmap parameters");
@@ -160,19 +160,39 @@ CollisionVelocityFilter::~CollisionVelocityFilter(){}
 
 // joystick_velocityCB reads twist command from joystick
 void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::ConstPtr &twist){
-  pthread_mutex_lock(&m_mutex);
-
-  robot_twist_linear_ = twist->linear;
-  robot_twist_angular_ = twist->angular;
-
-  pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_lock(&m_mutex);
+    robot_twist_linear_ = twist->linear;
+    robot_twist_angular_ = twist->angular;
+    pthread_mutex_unlock(&m_mutex);
 
   // check for relevant obstacles
   obstacleHandler();
+  // decompose the volocity when closed to stop threadhold
+  if( closest_obstacle_dist_ < stop_threshold_ *3){
+   VelocityRecalculation();
+   obstacleHandler();  
+  }
   // stop if we are about to run in an obstacle
-  performControllerStep();
-
+  performControllerStep();  
 }
+
+//VelocityRecalculation decomposes and replace the original velocity   
+void CollisionVelocityFilter::VelocityRecalculation(){
+  ROS_INFO("closest_obstacle_angle_ is %f",closest_obstacle_angle_);
+  ROS_INFO("robot_twist_linear_.x=%f,robot_twist_linear_.y=%f",robot_twist_linear_.x,robot_twist_linear_.y);
+
+  double vel_dis = sqrt(robot_twist_linear_.x*robot_twist_linear_.x + robot_twist_linear_.y*robot_twist_linear_.y);
+  double vel_angle = atan2(robot_twist_linear_.y,robot_twist_linear_.x);
+  double obstacle_vel_angle = closest_obstacle_angle_ - vel_angle;
+  double obstacle_vel_length = vel_dis*fabs(cos(obstacle_vel_angle));
+  //double obstacle_vel_length = vel_dis;
+  
+  double obstacle_vel_length_x = cos(closest_obstacle_angle_) * obstacle_vel_length;
+  double obstacle_vel_length_y = sin(closest_obstacle_angle_) * obstacle_vel_length;
+  robot_twist_linear_.x = (robot_twist_linear_.x - obstacle_vel_length_x);
+  robot_twist_linear_.y = (robot_twist_linear_.y - obstacle_vel_length_y);
+}    
+
 
 // obstaclesCB reads obstacles from costmap
 void CollisionVelocityFilter::obstaclesCB(const nav_msgs::GridCells::ConstPtr &obstacles){
@@ -236,7 +256,7 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
   pthread_mutex_lock(&m_mutex);
 
   stop_threshold_ = config.stop_threshold;
-  obstacle_damping_dist_ = config.obstacle_damping_dist;
+  obstacle_damping_dist_ = config.obstacle_damping_dist;  
   if(obstacle_damping_dist_ <= stop_threshold_) {
     obstacle_damping_dist_ = stop_threshold_ + 0.01; // set to stop_threshold_+0.01 to avoid divide by zero error
     ROS_WARN("obstacle_damping_dist <= stop_threshold -> robot will stop without decceleration!");
@@ -251,12 +271,11 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
 
   if (stop_threshold_ <= 0.0 || influence_radius_ <=0.0)
     ROS_WARN("Turned off obstacle avoidance!");
-  pthread_mutex_unlock(&m_mutex);
+pthread_mutex_unlock(&m_mutex);
 }
 
 // sets corrected velocity of joystick command
 void CollisionVelocityFilter::performControllerStep() {
-
   double dt;
   double vx_max, vy_max;
   geometry_msgs::Twist cmd_vel,cmd_vel_in;
@@ -280,6 +299,7 @@ void CollisionVelocityFilter::performControllerStep() {
     double F_x, F_y;
     double vx_d, vy_d, vx_factor, vy_factor;
     double kv_obst=kv_, vx_max_obst=vx_max, vy_max_obst=vy_max;
+    
 
     //implementation for linear decrease of v_max:
     double obstacle_linear_slope_x = vx_max / (obstacle_damping_dist_ - stop_threshold_);
@@ -342,6 +362,7 @@ void CollisionVelocityFilter::performControllerStep() {
       cmd_vel.angular.z = vtheta_last_ - atheta_max_ * dt;
   }
 
+
   pthread_mutex_lock(&m_mutex);
   vx_last_ = cmd_vel.linear.x;
   vy_last_ = cmd_vel.linear.y;
@@ -349,15 +370,19 @@ void CollisionVelocityFilter::performControllerStep() {
   pthread_mutex_unlock(&m_mutex);
 
   velocity_limited_marker_.publishMarkers(cmd_vel_in.linear.x, cmd_vel.linear.x, cmd_vel_in.linear.y, cmd_vel.linear.y, cmd_vel_in.angular.z, cmd_vel.angular.z);
+ 
 
-  // if closest obstacle is within stop_threshold, then do not move
+ // if closest obstacle is within stop_threshold, then do not move
   if( closest_obstacle_dist_ < stop_threshold_ ) {
-    stopMovement();
+    ROS_INFO("within stop_threadhold, stop movement");
+    stopMovement(); //if obstacle still exists in the direction of decomposed velocity, then stop
+    topic_pub_command_.publish(cmd_vel);  
   }
   else
-  {
+  {  
     // publish adjusted velocity 
-    topic_pub_command_.publish(cmd_vel);  
+    ROS_INFO("cmd_x= %f, cmd_y= %f", cmd_vel.linear.x, cmd_vel.linear.y);  
+    topic_pub_command_.publish(cmd_vel);   	 	
   }
   return;
 }
