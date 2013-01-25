@@ -34,6 +34,7 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include)
 rosbuild_add_executable(collision_velocity_filter
                         src/cob_collision_velocity_filter.cpp
                         src/velocity_limited_marker.cpp
+                        src/cob_collision_grid_map.cpp
                         )
 
 # add dynamic reconfigure api

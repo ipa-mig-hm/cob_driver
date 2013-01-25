@@ -166,13 +166,34 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   robot_twist_angular_ = twist->angular;
 
   pthread_mutex_unlock(&m_mutex);
-
+  // generate the potential field grid map
+  generatePotentialField();
   // check for relevant obstacles
   obstacleHandler();
   // stop if we are about to run in an obstacle
   performControllerStep();
 
 }
+
+
+void CollisionVelocityFilter::generatePotentialField(){
+  ROS_INFO("step0 is ok");
+  PotentialFieldGridMap pf;
+  ROS_INFO("step1 is ok");
+  pf.initCostMap();
+  ROS_INFO("step2 is ok");
+  pf.getCostMap(last_costmap_received_);
+  ROS_INFO("step3 is ok");
+  pf.testPrintOut();
+  ROS_INFO("step4 is ok");
+  pf.cellPFLinearGeneration();
+  ROS_INFO("step5 is ok");
+  pf.testPrintOut();
+  ROS_INFO("step6 is ok");
+  //pf.deleteCostMap();
+  
+}
+
 
 // obstaclesCB reads obstacles from costmap
 void CollisionVelocityFilter::obstaclesCB(const nav_msgs::GridCells::ConstPtr &obstacles){

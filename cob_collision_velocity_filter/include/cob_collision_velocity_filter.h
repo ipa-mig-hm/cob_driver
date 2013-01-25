@@ -82,6 +82,10 @@
 // BUT velocity limited marker
 #include "velocity_limited_marker.h"
 
+// potential field grid map
+#include "cob_collision_grid_map.h"
+
+
 ///
 /// @class CollisionVelocityFilter
 /// @brief checks for obstacles in driving direction and stops the robot
@@ -201,6 +205,14 @@ class CollisionVelocityFilter
     ///
     void stopMovement();
 
+
+
+    /// 
+    /// @brief generate the potential filed grid map
+    ///
+    void generatePotentialField();
+
+
     pthread_mutex_t m_mutex;
 
     //frames
@@ -228,7 +240,6 @@ class CollisionVelocityFilter
 
     // BUT velocity limited marker
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
-
 }; //CollisionVelocityFilter
 
 #endif
