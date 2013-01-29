@@ -22,7 +22,7 @@
 #include <boost/tokenizer.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
- 
+
 
 ///
 /// @class PotentialFieldGridMap
@@ -64,6 +64,12 @@ class PotentialFieldGridMap
     void testPrintOut();
     void initGridMap();
     void initCostMap();
+    void getPotentialForbidden();  
+    void getPotentialWarn();
+
+    nav_msgs::GridCells potential_field_forbidden_;
+    nav_msgs::GridCells potential_field_warn_;
+
   private:
 
     /* core functions */    
@@ -86,7 +92,10 @@ class PotentialFieldGridMap
     /// @brief  initialize the grid map, set all grid to '0'
     /// @param  size_x,size_y - grid size
     ///
-    
+   
+    /// 
+    /// @brif
+ 
     
     ///
     /// @brief  delete the grid map
@@ -118,7 +127,6 @@ class PotentialFieldGridMap
 
 
     pthread_mutex_t m_mutex;
-    //nav_msgs::GridCells last_costmap_received_;
     bool costmap_received_;
     //resolution of the imported costmap
     double resolution_; 
@@ -127,16 +135,17 @@ class PotentialFieldGridMap
     int cell_size_x_;
     int cell_size_y_;
     int* cost_map_;
+    nav_msgs::GridCells last_costmap_received_;
     //grid map 
-    int grid_resolution_;
+    double grid_resolution_;
     int grid_size_x_;
     int grid_size_y_;
     int* grid_map_;
     //potential field
     double influence_radius_; 
     int max_potential_value_;
-    int value_step_;
- 	
+    int step_value_;
+    double stop_threshold_;	
 }; //PotentialFieldGridMap
 #endif
 

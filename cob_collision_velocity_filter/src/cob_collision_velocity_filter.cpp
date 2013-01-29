@@ -69,6 +69,9 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   // implementation of topics to publish (command for base and list of relevant obstacles)
   topic_pub_command_ = nh_.advertise<geometry_msgs::Twist>("command", 1);
   topic_pub_relevant_obstacles_ = nh_.advertise<nav_msgs::GridCells>("relevant_obstacles", 1);
+  // implementation of topic to publish potential field of the local costmap
+  topic_pub_potential_field_forbidden_ = nh_.advertise<nav_msgs::GridCells>("potential_field_forbidden",1);
+  topic_pub_potential_field_warn_ = nh_.advertise<nav_msgs::GridCells>("potential_field_warn",1);  
 
   // subscribe to twist-movement of teleop 
   joystick_velocity_sub_ = nh_.subscribe<geometry_msgs::Twist>("teleop_twist", 1, boost::bind(&CollisionVelocityFilter::joystickVelocityCB, this, _1));
@@ -184,14 +187,16 @@ void CollisionVelocityFilter::generatePotentialField(){
   ROS_INFO("step2 is ok");
   pf.getCostMap(last_costmap_received_);
   ROS_INFO("step3 is ok");
-  pf.testPrintOut();
-  ROS_INFO("step4 is ok");
+ // pf.testPrintOut();
   pf.cellPFLinearGeneration();
-  ROS_INFO("step5 is ok");
-  pf.testPrintOut();
-  ROS_INFO("step6 is ok");
+ // pf.testPrintOut();
+  ROS_INFO("step4 is ok");
   //pf.deleteCostMap();
-  
+  pf.getPotentialWarn();
+  pf.getPotentialForbidden();
+  topic_pub_potential_field_warn_.publish(pf.potential_field_warn_);
+  ROS_INFO("step5 is ok");
+  topic_pub_potential_field_forbidden_.publish(pf.potential_field_forbidden_);
 }
 
 

@@ -143,6 +143,8 @@ class CollisionVelocityFilter
     /// declaration of publisher 
     ros::Publisher topic_pub_command_;
     ros::Publisher topic_pub_relevant_obstacles_;
+    ros::Publisher topic_pub_potential_field_forbidden_;
+    ros::Publisher topic_pub_potential_field_warn_;    
 
     /// declaration of subscriber
     ros::Subscriber joystick_velocity_sub_, obstacles_sub_;
@@ -169,9 +171,12 @@ class CollisionVelocityFilter
     ///
     void obstacleHandler();
 
+    /// 
+    /// @brief generate the potential filed grid map and publishes the 
+    ///        forbidden area and warn area of the potential field
+    void generatePotentialField();
 
     /* helper functions */
-
     ///
     /// @brief  loads the robot footprint published by the local costmap
     /// @param  node - NodeHandle to the local costmap
@@ -204,14 +209,6 @@ class CollisionVelocityFilter
     /// @brief  stops movement of the robot
     ///
     void stopMovement();
-
-
-
-    /// 
-    /// @brief generate the potential filed grid map
-    ///
-    void generatePotentialField();
-
 
     pthread_mutex_t m_mutex;
 
