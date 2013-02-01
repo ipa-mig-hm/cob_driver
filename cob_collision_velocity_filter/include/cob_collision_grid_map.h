@@ -24,6 +24,26 @@
 #include <boost/algorithm/string.hpp>
 
 
+class FootPrintLine
+{
+  public:
+    // constructor
+    FootPrintLine(); 
+    // destructor
+    ~FootPrintLine();
+     // the slope of the line
+    double slope_;
+    // the offset of the line
+    double offset_;
+
+    double x_start_;
+    double x_end_;
+    double y_start_;
+    double y_end_;
+    std::vector<int> index_x_;
+    std::vector<int> index_y_;
+    bool has_slope_;
+};
 ///
 /// @class PotentialFieldGridMap
 /// @a 2D grid map that provides the infomation of the potential field of the obstacle.  It takes the original 
@@ -66,14 +86,15 @@ class PotentialFieldGridMap
     void initCostMap();
     void getPotentialForbidden();  
     void getPotentialWarn();
+    ///
+    /// @brief  reads the robot footprint and calculate the related cells to the footprint
+    void getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint);
 
     nav_msgs::GridCells potential_field_forbidden_;
     nav_msgs::GridCells potential_field_warn_;
-
-  private:
-
-    /* core functions */    
-    
+    std::vector<geometry_msgs::Point> footprint_;
+    std::vector<FootPrintLine> footprint_line_;
+  private: 
     /// 
     /// @brief return the potential field value of the cell grouped by rectangle
     /// 
@@ -83,20 +104,32 @@ class PotentialFieldGridMap
     /// @brief return the potential field value of the cell grouped by circle
     ///
     int getCircleCellValue(int x, int y); 
-
-
-
-    /* helper functions */
-    
+ 
     ///
     /// @brief  initialize the grid map, set all grid to '0'
     /// @param  size_x,size_y - grid size
     ///
    
     /// 
-    /// @brif
- 
-    
+    /// @brief  get the coordinate of x based on the index of the cell
+    /// @param  index_x - x index of the cell array 
+    ///
+    double getCellCoordX(int index_x);
+   
+
+    /// 
+    /// @brief  get the coordinate of y based on the index of the cell
+    /// @param  index_y - y index of the cell array 
+    ///
+    double getCellCoordY(int index_y);
+
+
+    ///
+    /// @brief find the closet Cell on the footprint 
+    ///        and store the result in closest_cell_x_ and closest_cell_y_
+    void  findClosestCell();
+
+
     ///
     /// @brief  delete the grid map
     ///
@@ -145,7 +178,10 @@ class PotentialFieldGridMap
     double influence_radius_; 
     int max_potential_value_;
     int step_value_;
-    double stop_threshold_;	
+    double stop_threshold_;
+    int closest_cell_x_;
+    int closest_cell_y_;
+    double closet_cell_angle_;	
 }; //PotentialFieldGridMap
 #endif
 

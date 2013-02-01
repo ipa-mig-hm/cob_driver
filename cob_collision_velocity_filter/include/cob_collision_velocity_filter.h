@@ -237,6 +237,7 @@ class CollisionVelocityFilter
 
     // BUT velocity limited marker
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
+    PotentialFieldGridMap potential_field_grid_map_;
 }; //CollisionVelocityFilter
 
 #endif

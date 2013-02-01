@@ -181,22 +181,21 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
 
 void CollisionVelocityFilter::generatePotentialField(){
   ROS_INFO("step0 is ok");
-  PotentialFieldGridMap pf;
   ROS_INFO("step1 is ok");
-  pf.initCostMap();
+  potential_field_grid_map_.initCostMap();
   ROS_INFO("step2 is ok");
-  pf.getCostMap(last_costmap_received_);
+  potential_field_grid_map_.getCostMap(last_costmap_received_);
   ROS_INFO("step3 is ok");
  // pf.testPrintOut();
-  pf.cellPFLinearGeneration();
+ // pf.cellPFLinearGeneration();
  // pf.testPrintOut();
   ROS_INFO("step4 is ok");
   //pf.deleteCostMap();
-  pf.getPotentialWarn();
-  pf.getPotentialForbidden();
-  topic_pub_potential_field_warn_.publish(pf.potential_field_warn_);
+ //( pf.getPotentialWarn();
+ // pf.getPotentialForbidden();
+ // topic_pub_potential_field_warn_.publish(pf.potential_field_warn_);
   ROS_INFO("step5 is ok");
-  topic_pub_potential_field_forbidden_.publish(pf.potential_field_forbidden_);
+ // topic_pub_potential_field_forbidden_.publish(pf.potential_field_forbidden_);
 }
 
 
@@ -240,6 +239,8 @@ void CollisionVelocityFilter::getFootprintServiceCB(const ros::TimerEvent&)
     footprint_right_ = footprint_right_initial_;
 
     robot_footprint_ = footprint;
+    //read the new footprint
+    potential_field_grid_map_.getFootPrintCells(robot_footprint_);
     for(unsigned int i=0; i<footprint.size(); i++) {
       if(footprint[i].x > footprint_front_) footprint_front_ = footprint[i].x;
       if(footprint[i].x < footprint_rear_) footprint_rear_ = footprint[i].x;

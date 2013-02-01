@@ -19,6 +19,9 @@ PotentialFieldGridMap::PotentialFieldGridMap()
   max_potential_value_ = 250;
   step_value_ = max_potential_value_ / ((influence_radius_ / resolution_) - 1);
   stop_threshold_ = 0.1;
+  closet_cell_x_ = -1;
+  closet_cell_y_ = -1;
+  closet_cell_angle_
 }
 
 // Destructor
@@ -142,14 +145,30 @@ void PotentialFieldGridMap::getPotentialWarn(){
     for(int j=0;j<cell_size_y_;j++){
       int index = getCellIndex(i,j);
       if((cost_map_[index]>=warn_value)&&(cost_map_[index]<forbidden_value)){
-      warn_cell.x = (i+1)*resolution_ - cell_size_x_*resolution_/2;
-      warn_cell.y = (j+1)*resolution_ - cell_size_y_*resolution_/2;
+      warn_cell.x = getCellCoordX(i);
+      warn_cell.y = getCellCoordY(j);
       warn_cell.z = 0;
       potential_field_warn_.cells.push_back(warn_cell);
       }
     }
   }
 }
+
+
+double PotentialFieldGridMap::getCellCoordX(int index_x){
+  double cell_x;
+  if((cell_size_x_%2)==1) cell_x = (index_x+1)*resolution_ - cell_size_x_*resolution_/2;
+  else cell_x = (index_x+1)*resolution_ - (cell_size_x_+1)*resolution_/2;  
+  return cell_x;
+}
+
+double PotentialFieldGridMap::getCellCoordY(int index_y){
+  double cell_y;
+  if((cell_size_y_%2)==1) cell_y = (index_y+1)*resolution_ - cell_size_y_*resolution_/2;
+  else cell_y = (index_y+1)*resolution_ - (cell_size_y_+1)*resolution_/2;  
+  return cell_y;
+}
+
 
 int PotentialFieldGridMap::getRectangleCellValue(int x, int y){
   int cell_value;
@@ -201,7 +220,6 @@ int PotentialFieldGridMap::getCellIndex(int cell_x,int cell_y){
   } 
 }
 
-
 void PotentialFieldGridMap::testPrintOut(){
   for(int i=0;i<cell_size_x_;i++){
     for(int j=0;j<cell_size_y_;j++){         
@@ -212,11 +230,90 @@ void PotentialFieldGridMap::testPrintOut(){
 }
 
 
+void PotentialFieldGridMap::findClosestCell(){
+ 
 
 
 
 
+}
 
+FootPrintLine::FootPrintLine(){  
+}
+
+FootPrintLine::~FootPrintLine(){
+}
+
+void PotentialFieldGridMap::getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint){
+  //calculate the slope of the lines
+  int line_num = footprint.size();
+  footprint_line_.clear();
+  //initialize all footprint lines
+  double map_w = (cell_size_x_-1) * resolution_;
+  double map_h = (cell_size_y_-1) * resolution_; 
+  FootPrintLine fp_line;
+  for(int i=0;i<line_num;i++){
+     int i_next = (i+1) % line_num;
+     fp_line.x_start_ = footprint[i].x;
+     fp_line.x_end_ = footprint[i_next].x;
+     fp_line.y_start_ = footprint[i].y;
+     fp_line.y_end_ = footprint[i_next].y;
+     if(footprint[i].x==footprint[i_next].x)  fp_line.has_slope_ = false;
+     else fp_line.has_slope_ = true;
+     if(fp_line.has_slope_ == true){
+       fp_line.slope_ = (footprint[i_next].y - footprint[i].y ) / (footprint[i_next].x - footprint[i].x); 
+       fp_line.offset_ = footprint[i].x * footprint[i_next].y - footprint[i_next].x * footprint[i].y;  
+       fp_line.offset_ = fp_line.offset_ / (footprint[i].x - footprint[i_next].x); 
+     }
+      else {
+        fp_line.offset_ = footprint[i].x; 
+        fp_line.slope_ = 0;
+      }
+      fp_line.index_x_.clear();
+      fp_line.index_y_.clear();
+  footprint_line_.push_back(fp_line); 
+  }
+  for(unsigned int i=0;i<footprint_line_.size();i++){
+    int index_x_start = 0;
+    int index_y_start = 0; 
+    int index_x_end = 0;
+    int index_y_end = 0;
+    index_x_start = (footprint_line_[i].x_start_ + map_w/2) / resolution_;
+    index_y_start = (footprint_line_[i].y_start_ + map_h/2) / resolution_; 
+    index_x_end = (footprint_line_[i].x_end_ + map_w/2) / resolution_;
+    index_y_end = (footprint_line_[i].y_end_ + map_h/2) / resolution_; 
+    if(index_x_start>index_x_end) std::swap(index_x_start,index_x_end);
+    if(index_y_start>index_y_end) std::swap(index_y_start,index_y_end);
+    double cell_front_x,cell_rear_x,cell_left_y,cell_right_y;
+    if(footprint_line_[i].has_slope_ == true){
+      for(int j=index_y_start;j<=index_y_end;j++){
+        for(int k=index_x_start;k<=index_x_end;k++){
+          bool is_corner = false;
+          bool is_overlap = false;
+          if(((j==index_y_start)&&(k==index_x_start))||((j==index_y_end)&&(k==index_x_end))) is_corner = true;    
+          cell_left_y  = footprint_line_[i].slope_*(getCellCoordX(k)-resolution_/2) + footprint_line_[i].offset_;
+          cell_right_y = footprint_line_[i].slope_*(getCellCoordX(k)+resolution_/2) + footprint_line_[i].offset_;
+          cell_front_x = ((getCellCoordY(j)+resolution_/2) - footprint_line_[i].offset_) / footprint_line_[i].slope_; 
+          cell_rear_x  = ((getCellCoordY(j)-resolution_/2) - footprint_line_[i].offset_) / footprint_line_[i].slope_;
+          if(((cell_left_y>=(getCellCoordY(j)-resolution_/2))&&(cell_left_y<=(getCellCoordY(j)+resolution_/2)))||((cell_right_y>=(getCellCoordY(j)-resolution_/2))&&(cell_right_y<=(getCellCoordY(j)+resolution_/2)))||((cell_front_x>=(getCellCoordX(k)-resolution_/2))&&(cell_front_x<=(getCellCoordX(k)+resolution_/2)))||((cell_rear_x>=(getCellCoordX(k)-resolution_/2))&&(cell_front_x<=(getCellCoordX(k)+resolution_/2)))) is_overlap = true;
+          if(is_overlap){
+            if(!is_corner){
+   	      footprint_line_[i].index_x_.push_back(k);
+              footprint_line_[i].index_y_.push_back(j);
+            }
+          }
+        }
+      }
+    }  
+    else{
+      for(int j=index_y_start+1;j<index_y_end;j++){
+        footprint_line_[i].index_x_.push_back(index_x_start);
+        footprint_line_[i].index_y_.push_back(j);
+      }
+    }     
+  }
+
+}
 
 
 
