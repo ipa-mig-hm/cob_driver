@@ -40,10 +40,13 @@ class FootPrintLine
     double x_end_;
     double y_start_;
     double y_end_;
+    int index_x_start_;
+    int index_y_start_;
     std::vector<int> index_x_;
     std::vector<int> index_y_;
     bool has_slope_;
 };
+
 ///
 /// @class PotentialFieldGridMap
 /// @a 2D grid map that provides the infomation of the potential field of the obstacle.  It takes the original 
@@ -89,12 +92,23 @@ class PotentialFieldGridMap
     ///
     /// @brief  reads the robot footprint and calculate the related cells to the footprint
     void getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint);
+   
+    ///
+    /// @brief find the closet line on the footprint, set the line number
+    ///        and the start angle and end angle of the closest line
+    void findClosestLine();
+
+    ///
+    /// @brief guess if collision will happen in next command round
+    /// @param t - time between two command 
+    /// @return true if collision will happen        
+    bool collisionPreCalculate(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
 
     nav_msgs::GridCells potential_field_forbidden_;
     nav_msgs::GridCells potential_field_warn_;
-    std::vector<geometry_msgs::Point> footprint_;
-    std::vector<FootPrintLine> footprint_line_;
+     //std::vector<geometry_msgs::Point> footprint_;
   private: 
+   
     /// 
     /// @brief return the potential field value of the cell grouped by rectangle
     /// 
@@ -105,18 +119,14 @@ class PotentialFieldGridMap
     ///
     int getCircleCellValue(int x, int y); 
  
-    ///
-    /// @brief  initialize the grid map, set all grid to '0'
-    /// @param  size_x,size_y - grid size
-    ///
-   
+
     /// 
     /// @brief  get the coordinate of x based on the index of the cell
     /// @param  index_x - x index of the cell array 
     ///
     double getCellCoordX(int index_x);
    
-
+ 
     /// 
     /// @brief  get the coordinate of y based on the index of the cell
     /// @param  index_y - y index of the cell array 
@@ -125,9 +135,9 @@ class PotentialFieldGridMap
 
 
     ///
-    /// @brief find the closet Cell on the footprint 
-    ///        and store the result in closest_cell_x_ and closest_cell_y_
-    void  findClosestCell();
+    /// @brief check if the footprint is overlapped with the forbidden area
+    /// @return true if collision exists    
+    bool checkCollision();
 
 
     ///
@@ -157,16 +167,16 @@ class PotentialFieldGridMap
     ///    
     int getCellIndex( int cell_x,  int cell_y);
 
-
-
     pthread_mutex_t m_mutex;
+    //costmap
     bool costmap_received_;
-    //resolution of the imported costmap
     double resolution_; 
     double map_width_;
     double map_height_;
     int cell_size_x_;
     int cell_size_y_;
+    bool cell_size_x_odd_;
+    bool cell_size_y_odd_; 
     int* cost_map_;
     nav_msgs::GridCells last_costmap_received_;
     //grid map 
@@ -179,9 +189,12 @@ class PotentialFieldGridMap
     int max_potential_value_;
     int step_value_;
     double stop_threshold_;
-    int closest_cell_x_;
-    int closest_cell_y_;
-    double closet_cell_angle_;	
+    int forbidden_value_;
+    int warn_value_;    
+    //footprint
+    double closest_line_orth_angle_;	
+    int closest_line_num_;
+    std::vector<FootPrintLine> footprint_line_; 
 }; //PotentialFieldGridMap
 #endif
 

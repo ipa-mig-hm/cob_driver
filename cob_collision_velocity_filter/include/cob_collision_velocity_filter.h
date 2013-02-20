@@ -164,7 +164,7 @@ class CollisionVelocityFilter
     ///         robot and publishes command velocity to robot
     ///
     void performControllerStep();
-    
+    void performControllerStepNew();    
     ///
     /// @brief  checks for obstacles in driving direction of the robot (rotation included) 
     ///         and publishes relevant obstacles
@@ -176,6 +176,11 @@ class CollisionVelocityFilter
     ///        forbidden area and warn area of the potential field
     void generatePotentialField();
 
+    ///
+    /// @brief check if footprint will enter the forbidden area after the incoming command
+    bool collisionPreCalculate();
+
+
     /* helper functions */
     ///
     /// @brief  loads the robot footprint published by the local costmap
@@ -184,7 +189,7 @@ class CollisionVelocityFilter
     ///
     std::vector<geometry_msgs::Point> loadRobotFootprint(ros::NodeHandle node);
 
-
+    void modifyCommand(double rotate_angle,geometry_msgs::Vector3& robot_twist_linear,double vel_angle,double vel_length);
     ///
     /// @brief  returns the sign of x
     ///
@@ -237,7 +242,7 @@ class CollisionVelocityFilter
 
     // BUT velocity limited marker
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
-    PotentialFieldGridMap potential_field_grid_map_;
+    PotentialFieldGridMap potential_field_;
 }; //CollisionVelocityFilter
 
 #endif

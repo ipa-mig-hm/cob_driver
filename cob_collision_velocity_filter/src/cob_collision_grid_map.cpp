@@ -19,9 +19,14 @@ PotentialFieldGridMap::PotentialFieldGridMap()
   max_potential_value_ = 250;
   step_value_ = max_potential_value_ / ((influence_radius_ / resolution_) - 1);
   stop_threshold_ = 0.1;
-  closet_cell_x_ = -1;
-  closet_cell_y_ = -1;
-  closet_cell_angle_
+  //in_forbidden_area_ = false;
+  //in_warn_area_ = false;
+  if((cell_size_x_%2)==1) cell_size_x_odd_ = true; 
+  else cell_size_x_odd_ = false;
+  if((cell_size_y_%2)==1) cell_size_y_odd_ = true;
+  else cell_size_y_odd_ = false;
+  forbidden_value_ = max_potential_value_ - (stop_threshold_ / resolution_) * step_value_;
+  warn_value_ = max_potential_value_ - ((influence_radius_ - 0.5) / resolution_) * step_value_;
 }
 
 // Destructor
@@ -91,7 +96,7 @@ void PotentialFieldGridMap::cellPFLinearGeneration(){
       if(cost_map_[getCellIndex(i,j)]==max_potential_value_){
         for(int i_ob=-max_effect_number;i_ob<=max_effect_number;i_ob++){
           for(int j_ob=-max_effect_number;j_ob<=max_effect_number;j_ob++){
-          int index = getCellIndex((i+i_ob),(j+j_ob));
+            int index = getCellIndex((i+i_ob),(j+j_ob));
             if(index!=-1){
               map_tmp[index] = getRectangleCellValue(i_ob,j_ob);
              // map_tmp[index] = getCircleCellValue(i_ob,j_ob);
@@ -116,19 +121,19 @@ void PotentialFieldGridMap::getPotentialForbidden(){
   potential_field_forbidden_.cell_height = last_costmap_received_.cell_height;
   potential_field_forbidden_.cells.clear();
   geometry_msgs::Point forbidden_cell;
-  int forbidden_cell_length = ((stop_threshold_ / resolution_));
-  int forbidden_value = max_potential_value_ - forbidden_cell_length * step_value_;
   for(int i=0;i<cell_size_x_;i++){
     for(int j=0;j<cell_size_y_;j++ ){
       int index = getCellIndex(i,j);
-      if(cost_map_[index]>=forbidden_value){
-      forbidden_cell.x = (i+1)*resolution_ - cell_size_x_*resolution_/2;
-      forbidden_cell.y = (j+1)*resolution_ - cell_size_y_*resolution_/2;
+      if(cost_map_[index]>=forbidden_value_){
+      forbidden_cell.x = getCellCoordX(i);
+      forbidden_cell.y = getCellCoordY(j);
       forbidden_cell.z = 0;
       potential_field_forbidden_.cells.push_back(forbidden_cell);
+      //printf("(%2d,%2d,%3d)",i,j,cost_map_[index]);
       }              
     }
   }
+     // printf("\n\n");
 }
 
 void PotentialFieldGridMap::getPotentialWarn(){
@@ -137,14 +142,10 @@ void PotentialFieldGridMap::getPotentialWarn(){
   potential_field_warn_.cell_height = last_costmap_received_.cell_height;
   potential_field_warn_.cells.clear();
   geometry_msgs::Point warn_cell;
-  int forbidden_cell_length = ((stop_threshold_ / resolution_));
-  int forbidden_value = max_potential_value_ - forbidden_cell_length * step_value_;
-  int warn_cell_length = (influence_radius_ - 0.5) / resolution_;
-  int warn_value = max_potential_value_ - warn_cell_length * step_value_;
   for(int i=0;i<cell_size_x_;i++){
     for(int j=0;j<cell_size_y_;j++){
       int index = getCellIndex(i,j);
-      if((cost_map_[index]>=warn_value)&&(cost_map_[index]<forbidden_value)){
+      if((cost_map_[index]>=warn_value_)&&(cost_map_[index]<forbidden_value_)){
       warn_cell.x = getCellCoordX(i);
       warn_cell.y = getCellCoordY(j);
       warn_cell.z = 0;
@@ -157,17 +158,18 @@ void PotentialFieldGridMap::getPotentialWarn(){
 
 double PotentialFieldGridMap::getCellCoordX(int index_x){
   double cell_x;
-  if((cell_size_x_%2)==1) cell_x = (index_x+1)*resolution_ - cell_size_x_*resolution_/2;
+  if(cell_size_x_odd_) cell_x = (index_x+1)*resolution_ - cell_size_x_*resolution_/2;
   else cell_x = (index_x+1)*resolution_ - (cell_size_x_+1)*resolution_/2;  
   return cell_x;
 }
 
 double PotentialFieldGridMap::getCellCoordY(int index_y){
   double cell_y;
-  if((cell_size_y_%2)==1) cell_y = (index_y+1)*resolution_ - cell_size_y_*resolution_/2;
+  if(cell_size_y_odd_) cell_y = (index_y+1)*resolution_ - cell_size_y_*resolution_/2;
   else cell_y = (index_y+1)*resolution_ - (cell_size_y_+1)*resolution_/2;  
   return cell_y;
 }
+
 
 
 int PotentialFieldGridMap::getRectangleCellValue(int x, int y){
@@ -176,6 +178,22 @@ int PotentialFieldGridMap::getRectangleCellValue(int x, int y){
   else cell_value =  max_potential_value_ - fabs(y)*step_value_;
   return cell_value;
 }
+
+
+
+/*
+void PotentialFieldGridMap::generateRectangleCellMap(int max_effect_number){
+    int index;
+    for(int i=-max_effect_number; i<=max_effect_number; i++){
+      for(int j=-max_effect_number;j<=max_effect_number;j++){
+
+        potential_field_map_.insert(pair<int,int>());      
+  
+    
+      }
+    }
+}*/
+
 
 int PotentialFieldGridMap::getCircleCellValue(int x, int y){
   int cell_value;
@@ -229,13 +247,77 @@ void PotentialFieldGridMap::testPrintOut(){
   }   
 }
 
+bool  PotentialFieldGridMap::collisionPreCalculate(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint){
 
-void PotentialFieldGridMap::findClosestCell(){
+//simulate a new footprint 
+  double vel_angle = atan2(cmd_vel.y, cmd_vel.x);
+  double x_offset = cos(vel_angle) * stop_threshold_ ; 
+  double y_offset = sin(vel_angle) * stop_threshold_ ;
+  //ROS_INFO("x_offset:%f,y_offset:%f",x_offset,y_offset);
+  std::vector<geometry_msgs::Point> new_footprint;
+  new_footprint.clear();
+  geometry_msgs::Point pt;
+  for(unsigned int i=0; i<footprint.size(); i++){
+    pt.x = footprint[i].x + x_offset;
+    pt.y = footprint[i].y + y_offset;
+    pt.z = 0;
+    new_footprint.push_back(pt);
+   // ROS_INFO("new footprint %d is: %f,%f,%f\n",i,pt.x,pt.y,pt.z);
+  }
+  getFootPrintCells(new_footprint);
+  return (checkCollision());
+}
+
+bool PotentialFieldGridMap::checkCollision(){
+  int index_x,index_y;
+  bool in_forbidden_area = false; 
+  for(unsigned int i=0;i<footprint_line_.size();i++){ 
+    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] >= forbidden_value_) in_forbidden_area = true; 
+    for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){
+      index_x = footprint_line_[i].index_x_[j];
+      index_y = footprint_line_[i].index_y_[j];
+      if(cost_map_[getCellIndex(index_x,index_y)] >= forbidden_value_) in_forbidden_area = true;           } 
+  }
+  return in_forbidden_area;
+}
+
+
+void PotentialFieldGridMap::findClosestLine(){
+  //set the first line as the defalult cloesest line
+  int cell_potential_field = 0;
+  int cell_potential_field_max = 0;
+  int index_x;
+  int index_y;
+  unsigned int index_x_max =0;
+  unsigned int index_y_max =0;
  
+  for(unsigned int i=0;i<footprint_line_.size();i++){
+    for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){
+      index_x = footprint_line_[i].index_x_[j];
+      index_y = footprint_line_[i].index_y_[j];
+      cell_potential_field = cost_map_[getCellIndex(index_x,index_y)];
+      if(cell_potential_field>cell_potential_field_max){
+        cell_potential_field_max = cell_potential_field;
+        closest_line_num_ = i;
+        index_x_max = index_x;
+        index_y_max = index_y;
+      }
+    }       
+  }
+   
 
-
-
-
+  double closest_line_start_angle = atan2(footprint_line_[closest_line_num_].y_start_,footprint_line_[closest_line_num_].x_start_);
+  double closest_line_end_angle = atan2(footprint_line_[closest_line_num_].y_end_,footprint_line_[closest_line_num_].x_end_);
+  if(closest_line_end_angle<closest_line_start_angle) std::swap(closest_line_end_angle,closest_line_start_angle);
+  if(footprint_line_[closest_line_num_].has_slope_){
+    closest_line_orth_angle_ = atan(footprint_line_[closest_line_num_].slope_) + M_PI / 2.0f;
+    if(closest_line_orth_angle_<closest_line_start_angle||closest_line_orth_angle_>closest_line_end_angle) 
+    closest_line_orth_angle_ = - closest_line_orth_angle_;
+    if(closest_line_orth_angle_<closest_line_start_angle||closest_line_orth_angle_>closest_line_end_angle) 
+    ROS_WARN("closest line orth angle is out of rage");
+  } 
+ // ROS_INFO("the closest line number is %d",closest_line_num_);
+ // ROS_INFO("max potential field value is %d on (%d,%d)",cell_potential_field_max,index_x_max,index_y_max);
 }
 
 FootPrintLine::FootPrintLine(){  
@@ -269,6 +351,7 @@ void PotentialFieldGridMap::getFootPrintCells(const std::vector<geometry_msgs::P
         fp_line.offset_ = footprint[i].x; 
         fp_line.slope_ = 0;
       }
+     // ROS_INFO("ponit num %d (%f,%f)",i,fp_line.x_start_,fp_line.y_start_);
       fp_line.index_x_.clear();
       fp_line.index_y_.clear();
   footprint_line_.push_back(fp_line); 
@@ -280,8 +363,11 @@ void PotentialFieldGridMap::getFootPrintCells(const std::vector<geometry_msgs::P
     int index_y_end = 0;
     index_x_start = (footprint_line_[i].x_start_ + map_w/2) / resolution_;
     index_y_start = (footprint_line_[i].y_start_ + map_h/2) / resolution_; 
+    footprint_line_[i].index_x_start_ = index_x_start;
+    footprint_line_[i].index_y_start_ = index_y_start;
     index_x_end = (footprint_line_[i].x_end_ + map_w/2) / resolution_;
-    index_y_end = (footprint_line_[i].y_end_ + map_h/2) / resolution_; 
+    index_y_end = (footprint_line_[i].y_end_ + map_h/2) / resolution_;
+    // ROS_INFO("line %d (%d,%d)",i,index_x_start,index_y_start); 
     if(index_x_start>index_x_end) std::swap(index_x_start,index_x_end);
     if(index_y_start>index_y_end) std::swap(index_y_start,index_y_end);
     double cell_front_x,cell_rear_x,cell_left_y,cell_right_y;
@@ -310,7 +396,12 @@ void PotentialFieldGridMap::getFootPrintCells(const std::vector<geometry_msgs::P
         footprint_line_[i].index_x_.push_back(index_x_start);
         footprint_line_[i].index_y_.push_back(j);
       }
-    }     
+    }
+   /*test 
+   for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){   
+       printf("( %d,%d )",footprint_line_[i].index_x_[j],footprint_line_[i].index_y_[j]);
+   }*/
+     
   }
 
 }

@@ -152,7 +152,6 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   vx_last_ = 0.0;
   vy_last_ = 0.0;
   vtheta_last_ = 0.0;
-
   // dynamic reconfigure
   dynCB_ = boost::bind(&CollisionVelocityFilter::dynamicReconfigureCB, this, _1, _2);
   dyn_server_.setCallback(dynCB_);
@@ -168,36 +167,80 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   robot_twist_linear_ = twist->linear;
   robot_twist_angular_ = twist->angular;
 
+
+
   pthread_mutex_unlock(&m_mutex);
   // generate the potential field grid map
   generatePotentialField();
-  // check for relevant obstacles
-  obstacleHandler();
-  // stop if we are about to run in an obstacle
-  performControllerStep();
-
+  
+  if(collisionPreCalculate() == false) {
+    ROS_INFO("cannot move any way");
+    stopMovement();
+  }
+  else{
+    // check for relevant obstacles
+    obstacleHandler();
+    // stop if we are about to run in an obstacle
+    performControllerStep();
+  }
 }
 
 
 void CollisionVelocityFilter::generatePotentialField(){
-  ROS_INFO("step0 is ok");
-  ROS_INFO("step1 is ok");
-  potential_field_grid_map_.initCostMap();
-  ROS_INFO("step2 is ok");
-  potential_field_grid_map_.getCostMap(last_costmap_received_);
-  ROS_INFO("step3 is ok");
- // pf.testPrintOut();
- // pf.cellPFLinearGeneration();
- // pf.testPrintOut();
-  ROS_INFO("step4 is ok");
+  potential_field_.initCostMap();
+  potential_field_.getCostMap(last_costmap_received_);
+  // pf.testPrintOut();
+  potential_field_.cellPFLinearGeneration();
+  // pf.testPrintOut();
   //pf.deleteCostMap();
- //( pf.getPotentialWarn();
- // pf.getPotentialForbidden();
- // topic_pub_potential_field_warn_.publish(pf.potential_field_warn_);
-  ROS_INFO("step5 is ok");
- // topic_pub_potential_field_forbidden_.publish(pf.potential_field_forbidden_);
+  potential_field_.getPotentialWarn();
+  potential_field_.getPotentialForbidden();  
+  topic_pub_potential_field_warn_.publish(potential_field_.potential_field_warn_);
+  topic_pub_potential_field_forbidden_.publish(potential_field_.potential_field_forbidden_);
+  //potential_field_.findClosestLine();
 }
 
+bool CollisionVelocityFilter::collisionPreCalculate(){
+  bool has_collision = true;
+  bool in_range = true;
+  if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0) return in_range;
+else{
+  std::vector<geometry_msgs::Point> robot_footprint;
+  geometry_msgs::Vector3 robot_twist_linear = robot_twist_linear_;
+  double vel_angle = atan2(robot_twist_linear_.y, robot_twist_linear_.x);
+  double vel_length = sqrt(robot_twist_linear_.y * robot_twist_linear_.y + robot_twist_linear_.x * robot_twist_linear_.x);  
+  double rotate_angle = 0;
+  pthread_mutex_lock(&m_mutex);
+  robot_footprint = robot_footprint_; 
+  pthread_mutex_unlock(&m_mutex);
+  
+  while(has_collision && in_range){
+    has_collision = potential_field_.collisionPreCalculate(robot_twist_linear,robot_footprint);
+    if(has_collision){
+      //ROS_INFO("need to change velocity");
+      rotate_angle = rotate_angle - (M_PI / 36.0f);
+      // ROS_INFO("rotate_angle is now %f",rotate_angle);
+      if(rotate_angle <= -M_PI/2) in_range = false; 
+      else modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
+    }   
+  } 
+  ROS_INFO("original command is %f,%f", robot_twist_linear_.x,robot_twist_linear_.y);
+  if(robot_twist_linear_.x!=robot_twist_linear.x || robot_twist_linear_.y!=robot_twist_linear.y)
+  ROS_INFO("angle change is %f, modified command is %f,%f", rotate_angle,robot_twist_linear.x,robot_twist_linear.y);
+
+  if(in_range) robot_twist_linear_ = robot_twist_linear;
+  
+
+  return in_range;}
+}
+
+void CollisionVelocityFilter::modifyCommand(double rotate_angle, geometry_msgs::Vector3& robot_twist_linear,double vel_angle,double vel_length){
+  double new_vel_angle = vel_angle + rotate_angle;
+  robot_twist_linear.x = vel_length * cos(new_vel_angle);
+  robot_twist_linear.y = vel_length * sin(new_vel_angle);
+  //ROS_INFO("modifeid command x:%f,y:%f",robot_twist_linear.x,robot_twist_linear.y);
+ 
+}
 
 // obstaclesCB reads obstacles from costmap
 void CollisionVelocityFilter::obstaclesCB(const nav_msgs::GridCells::ConstPtr &obstacles){
@@ -240,7 +283,7 @@ void CollisionVelocityFilter::getFootprintServiceCB(const ros::TimerEvent&)
 
     robot_footprint_ = footprint;
     //read the new footprint
-    potential_field_grid_map_.getFootPrintCells(robot_footprint_);
+    //potential_field_.getFootPrintCells(robot_footprint_);
     for(unsigned int i=0; i<footprint.size(); i++) {
       if(footprint[i].x > footprint_front_) footprint_front_ = footprint[i].x;
       if(footprint[i].x < footprint_rear_) footprint_rear_ = footprint[i].x;
@@ -281,12 +324,33 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
   pthread_mutex_unlock(&m_mutex);
 }
 
+
+void CollisionVelocityFilter::performControllerStepNew() {
+ 
+  double vx_max,vy_max;
+  geometry_msgs::Twist cmd_vel,cmd_vel_in;
+  cmd_vel_in.linear = robot_twist_linear_;
+  cmd_vel_in.angular = robot_twist_angular_;
+  
+  double vel_angle = atan2(cmd_vel.linear.y,cmd_vel.linear.x);
+  vx_max = v_max_ * fabs(cos(vel_angle));
+  if (vx_max < fabs(cmd_vel.linear.x)) cmd_vel.linear.x = sign(cmd_vel.linear.x) * vx_max;
+  vy_max = v_max_ * fabs(sin(vel_angle));
+  if (vy_max < fabs(cmd_vel.linear.y)) cmd_vel.linear.y = sign(cmd_vel.linear.y) * vy_max;
+    
+  
+}
+
+
+
+
 // sets corrected velocity of joystick command
 void CollisionVelocityFilter::performControllerStep() {
 
   double dt;
   double vx_max, vy_max;
   geometry_msgs::Twist cmd_vel,cmd_vel_in;
+   
 
   cmd_vel_in.linear = robot_twist_linear_;
   cmd_vel_in.angular = robot_twist_angular_;
@@ -377,10 +441,13 @@ void CollisionVelocityFilter::performControllerStep() {
 
   velocity_limited_marker_.publishMarkers(cmd_vel_in.linear.x, cmd_vel.linear.x, cmd_vel_in.linear.y, cmd_vel.linear.y, cmd_vel_in.angular.z, cmd_vel.angular.z);
 
+  
+
   // if closest obstacle is within stop_threshold, then do not move
   if( closest_obstacle_dist_ < stop_threshold_ ) {
     stopMovement();
   }
+  
   else
   {
     // publish adjusted velocity 
