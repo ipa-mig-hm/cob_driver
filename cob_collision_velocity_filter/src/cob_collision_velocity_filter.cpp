@@ -148,6 +148,7 @@ CollisionVelocityFilter::CollisionVelocityFilter()
     atheta_max_ = 0.7;
   }
 
+  max_warn_value_ = 0;
   last_time_ = ros::Time::now().toSec();
   vx_last_ = 0.0;
   vy_last_ = 0.0;
@@ -172,16 +173,18 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   pthread_mutex_unlock(&m_mutex);
   // generate the potential field grid map
   generatePotentialField();
-  
+   
   if(collisionPreCalculate() == false) {
     ROS_INFO("cannot move any way");
     stopMovement();
   }
   else{
-    // check for relevant obstacles
-    obstacleHandler();
-    // stop if we are about to run in an obstacle
     performControllerStep();
+
+    // check for relevant obstacles
+    //obstacleHandler();
+    // stop if we are about to run in an obstacle
+    //performControllerStep();
   }
 }
 
@@ -213,24 +216,35 @@ else{
   pthread_mutex_lock(&m_mutex);
   robot_footprint = robot_footprint_; 
   pthread_mutex_unlock(&m_mutex);
-  
   while(has_collision && in_range){
     has_collision = potential_field_.collisionPreCalculate(robot_twist_linear,robot_footprint);
     if(has_collision){
       //ROS_INFO("need to change velocity");
-      rotate_angle = rotate_angle - (M_PI / 36.0f);
+      rotate_angle = rotate_angle - (M_PI / 144.0f);
       // ROS_INFO("rotate_angle is now %f",rotate_angle);
-      if(rotate_angle <= -M_PI/2) in_range = false; 
+      if(rotate_angle < -M_PI/2.4) in_range = false; 
       else modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
-    }   
-  } 
-  ROS_INFO("original command is %f,%f", robot_twist_linear_.x,robot_twist_linear_.y);
-  if(robot_twist_linear_.x!=robot_twist_linear.x || robot_twist_linear_.y!=robot_twist_linear.y)
-  ROS_INFO("angle change is %f, modified command is %f,%f", rotate_angle,robot_twist_linear.x,robot_twist_linear.y);
+    }
+  }
+  in_range = true;
+  rotate_angle = 0;
+  while(has_collision && in_range){
+    rotate_angle = rotate_angle + (M_PI / 144.0f);
+    if(rotate_angle > M_PI/2.4) in_range = false;
+    else{
+      modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
+      has_collision = potential_field_.collisionPreCalculate(robot_twist_linear,robot_footprint);
+    }
+   }
+ 
+// ROS_INFO("original command is %f,%f", robot_twist_linear_.x,robot_twist_linear_.y);
+// if(robot_twist_linear_.x!=robot_twist_linear.x || robot_twist_linear_.y!=robot_twist_linear.y)
+// ROS_INFO("angle change is %f, modified command is %f,%f", rotate_angle,robot_twist_linear.x,robot_twist_linear.y);
 
-  if(in_range) robot_twist_linear_ = robot_twist_linear;
-  
-
+  if(in_range) {
+    robot_twist_linear_ = robot_twist_linear;
+    max_warn_value_ =  potential_field_.findWarnValue(robot_twist_linear_);
+  }
   return in_range;}
 }
 
@@ -344,7 +358,8 @@ void CollisionVelocityFilter::performControllerStepNew() {
 
 
 
-// sets corrected velocity of joystick command
+// sets corrected velocity of joystick command 
+/*
 void CollisionVelocityFilter::performControllerStep() {
 
   double dt;
@@ -455,6 +470,24 @@ void CollisionVelocityFilter::performControllerStep() {
   }
   return;
 }
+*/
+// TODO
+void CollisionVelocityFilter::performControllerStep() {
+  ROS_INFO("max_value is now %d",max_warn_value_);
+  geometry_msgs::Twist cmd_vel;
+  cmd_vel.angular = robot_twist_angular_;
+  cmd_vel.linear.x = robot_twist_linear_.x * 0.30 + (robot_twist_linear_.x * ((226.00f - max_warn_value_)/226.00f)); 
+  cmd_vel.linear.y = robot_twist_linear_.y * 0.30 + (robot_twist_linear_.y * ((226.00f - max_warn_value_)/226.00f));
+  cmd_vel.linear.z = 0;
+  if(fabs(cmd_vel.linear.x)>fabs(robot_twist_linear_.x))  cmd_vel.linear.x = robot_twist_linear_.x;
+  if(fabs(cmd_vel.linear.y)>fabs(robot_twist_linear_.y))  cmd_vel.linear.y = robot_twist_linear_.y;
+  ROS_INFO("publish command is %f,%f\n",cmd_vel.linear.x,cmd_vel.linear.y);
+  topic_pub_command_.publish(cmd_vel); 
+
+}
+
+
+
 
 void CollisionVelocityFilter::obstacleHandler() {
   pthread_mutex_lock(&m_mutex);

@@ -25,6 +25,7 @@ PotentialFieldGridMap::PotentialFieldGridMap()
   else cell_size_x_odd_ = false;
   if((cell_size_y_%2)==1) cell_size_y_odd_ = true;
   else cell_size_y_odd_ = false;
+  //forbidden_value_ = 250;
   forbidden_value_ = max_potential_value_ - (stop_threshold_ / resolution_) * step_value_;
   warn_value_ = max_potential_value_ - ((influence_radius_ - 0.5) / resolution_) * step_value_;
 }
@@ -251,8 +252,8 @@ bool  PotentialFieldGridMap::collisionPreCalculate(const geometry_msgs::Vector3&
 
 //simulate a new footprint 
   double vel_angle = atan2(cmd_vel.y, cmd_vel.x);
-  double x_offset = cos(vel_angle) * stop_threshold_ ; 
-  double y_offset = sin(vel_angle) * stop_threshold_ ;
+  double x_offset = cos(vel_angle) * stop_threshold_ * 1.5 ; 
+  double y_offset = sin(vel_angle) * stop_threshold_ * 1.5 ;
   //ROS_INFO("x_offset:%f,y_offset:%f",x_offset,y_offset);
   std::vector<geometry_msgs::Point> new_footprint;
   new_footprint.clear();
@@ -272,13 +273,54 @@ bool PotentialFieldGridMap::checkCollision(){
   int index_x,index_y;
   bool in_forbidden_area = false; 
   for(unsigned int i=0;i<footprint_line_.size();i++){ 
-    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] >= forbidden_value_) in_forbidden_area = true; 
+    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] == forbidden_value_) in_forbidden_area = true; 
     for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){
       index_x = footprint_line_[i].index_x_[j];
       index_y = footprint_line_[i].index_y_[j];
-      if(cost_map_[getCellIndex(index_x,index_y)] >= forbidden_value_) in_forbidden_area = true;           } 
+      if(cost_map_[getCellIndex(index_x,index_y)] >= forbidden_value_)
+      in_forbidden_area = true;
+      
+    }          
   }
   return in_forbidden_area;
+}
+
+//need to rewrite  for different footprints 
+void PotentialFieldGridMap::setRelatedLine(const geometry_msgs::Vector3& cmd_vel){
+  if(cmd_vel.x==0&&cmd_vel.y>0) footprint_line_[3].related_ = true;
+  else if(cmd_vel.x==0&&cmd_vel.y<0) footprint_line_[1].related_ = true;
+  else if(cmd_vel.x>0&&cmd_vel.y==0) footprint_line_[0].related_ = true;
+  else if(cmd_vel.x<0&&cmd_vel.y==0) footprint_line_[2].related_ = true;
+  else if(cmd_vel.x<0&&cmd_vel.y<0) { footprint_line_[1].related_ = true; footprint_line_[2].related_ = true;}
+  else if(cmd_vel.x<0&&cmd_vel.y>0) { footprint_line_[2].related_ = true; footprint_line_[3].related_ = true;}
+  else if(cmd_vel.x>0&&cmd_vel.y<0) { footprint_line_[0].related_ = true; footprint_line_[1].related_ = true;}
+  else if(cmd_vel.x>0&&cmd_vel.y>0) { footprint_line_[3].related_ = true; footprint_line_[0].related_ = true;}
+}
+
+
+int PotentialFieldGridMap::findWarnValue(const geometry_msgs::Vector3& cmd_vel){
+  for(unsigned int i=0;i<footprint_line_.size();i++)
+  footprint_line_[i].related_ = false;
+  setRelatedLine(cmd_vel);
+  int max_warn_value = 0;
+  int warn_value;
+  unsigned int index_x,index_y;
+  for(unsigned int i=0;i<footprint_line_.size();i++){
+    if(footprint_line_[i].related_ == true){
+      for(unsigned int j=0;j<footprint_line_[i].index_x_.size(); j++){
+        index_x = footprint_line_[i].index_x_[j];
+   	index_y = footprint_line_[i].index_y_[j];
+        warn_value = cost_map_[getCellIndex(index_x,index_y)];
+	if(warn_value > max_warn_value) max_warn_value = warn_value;
+      }
+    warn_value = cost_map_[getCellIndex(footprint_line_[i].index_x_start_,footprint_line_[i].index_y_start_)];
+    if(warn_value > max_warn_value) max_warn_value = warn_value;
+    warn_value = cost_map_[getCellIndex(footprint_line_[i].index_x_end_,footprint_line_[i].index_y_end_)];
+    if(warn_value > max_warn_value) max_warn_value = warn_value;
+    }
+  //ROS_INFO("max warn_value:%d",max_warn_value);
+  }
+  return max_warn_value;
 }
 
 
@@ -367,6 +409,8 @@ void PotentialFieldGridMap::getFootPrintCells(const std::vector<geometry_msgs::P
     footprint_line_[i].index_y_start_ = index_y_start;
     index_x_end = (footprint_line_[i].x_end_ + map_w/2) / resolution_;
     index_y_end = (footprint_line_[i].y_end_ + map_h/2) / resolution_;
+    footprint_line_[i].index_x_end_ = index_x_end;
+    footprint_line_[i].index_y_end_ = index_y_end;
     // ROS_INFO("line %d (%d,%d)",i,index_x_start,index_y_start); 
     if(index_x_start>index_x_end) std::swap(index_x_start,index_x_end);
     if(index_y_start>index_y_end) std::swap(index_y_start,index_y_end);

@@ -42,9 +42,12 @@ class FootPrintLine
     double y_end_;
     int index_x_start_;
     int index_y_start_;
+    int index_x_end_;
+    int index_y_end_;
     std::vector<int> index_x_;
     std::vector<int> index_y_;
     bool has_slope_;
+    bool related_;
 };
 
 ///
@@ -100,14 +103,24 @@ class PotentialFieldGridMap
 
     ///
     /// @brief guess if collision will happen in next command round
-    /// @param t - time between two command 
+    /// @param cmd_vel--raw velocity command             
     /// @return true if collision will happen        
     bool collisionPreCalculate(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
+   
+ 
+    /// @brief find the biggest potential value in related footpirnt line 
+    /// TODO It is only for rectangle footprint now!! need further implementation later      
+    int findWarnValue(const geometry_msgs::Vector3& cmd_vel);
 
     nav_msgs::GridCells potential_field_forbidden_;
     nav_msgs::GridCells potential_field_warn_;
      //std::vector<geometry_msgs::Point> footprint_;
   private: 
+
+
+    void setRelatedLine(const geometry_msgs::Vector3& cmd_vel);
+
+
    
     /// 
     /// @brief return the potential field value of the cell grouped by rectangle
