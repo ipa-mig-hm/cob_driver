@@ -24,6 +24,12 @@
 #include <boost/algorithm/string.hpp>
 
 
+
+
+///
+/// @class FootPrintLine
+/// @brief store the information of every segment of the robot footprint
+/// 
 class FootPrintLine
 {
   public:
@@ -34,8 +40,8 @@ class FootPrintLine
      // the slope of the line
     double slope_;
     // the offset of the line
-    double offset_;
-
+    double offset_;  
+    // start and end coordinate of the line
     double x_start_;
     double x_end_;
     double y_start_;
@@ -47,7 +53,18 @@ class FootPrintLine
     std::vector<int> index_x_;
     std::vector<int> index_y_;
     bool has_slope_;
+    // set if this footprint line is within the robot moving direction 
     bool related_;
+
+    /* 0 -- north
+       1 -- north east
+       2 -- east
+       3 -- south east 
+       4 -- south 
+       5 -- south west
+       6 -- west
+       7 -- north west  */
+    //bool related_direction_[8];    
 };
 
 ///
@@ -58,6 +75,7 @@ class FootPrintLine
 class PotentialFieldGridMap
 {  
   public:
+ 
 
     ///
     /// @brief  Constructor
@@ -87,13 +105,23 @@ class PotentialFieldGridMap
     /// @param  obstacles - 2D occupancy grid in rolling window mode!
     ///
     void getCostMap(const nav_msgs::GridCells& last_costmap_received);
-    void testPrintOut();
+  
+    /// @brief initialize the gridmap
     void initGridMap();
+
+    /// @brief initialize the costmap
     void initCostMap();
+    
+    /// @brief generate the msg for potential_field_forbidden_
     void getPotentialForbidden();  
+
+    /// @brief generate the msg for potential_field_warn_ 
     void getPotentialWarn();
+
     ///
     /// @brief  reads the robot footprint and calculate the related cells to the footprint
+    /// @param  footprint - robot footprint 
+    ///
     void getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint);
    
     ///
@@ -103,36 +131,52 @@ class PotentialFieldGridMap
 
     ///
     /// @brief guess if collision will happen in next command round
-    /// @param cmd_vel--raw velocity command             
-    /// @return true if collision will happen        
+    /// @param cmd_vel- raw velocity command    
+    /// @param footprint - robot footprint          
+    /// @return true if collision will happen
+    ///        
     bool collisionPreCalculate(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
+
+    bool collisionByRotation(double angular,const std::vector<geometry_msgs::Point>& footprint);
+
    
- 
+    ///
     /// @brief find the biggest potential value in related footpirnt line 
-    /// TODO It is only for rectangle footprint now!! need further implementation later      
+    /// @param cmd_vel - raw velocity command
+    /// @return - then max cell value in related footprint line
+    ///       
     int findWarnValue(const geometry_msgs::Vector3& cmd_vel);
 
+    
     nav_msgs::GridCells potential_field_forbidden_;
     nav_msgs::GridCells potential_field_warn_;
-     //std::vector<geometry_msgs::Point> footprint_;
+    double resolution_; 
+    double influence_radius_; 
+    double stop_threshold_;
+    double map_width_;
+    double map_height_;
+    int max_potential_value_;
+    
+    void initial(); 
   private: 
 
-
+    ///
+    /// @brief find and set the related lines to a certain velocity command 
+    ///
     void setRelatedLine(const geometry_msgs::Vector3& cmd_vel);
-
-
    
     /// 
     /// @brief return the potential field value of the cell grouped by rectangle
-    /// 
+    /// @param x,y - index of the cell in cost_map_
+    ///
     int getRectangleCellValue(int x, int y);
      
     ///
     /// @brief return the potential field value of the cell grouped by circle
+    /// @param x,y - index of the cell in cost_map_
     ///
     int getCircleCellValue(int x, int y); 
  
-
     /// 
     /// @brief  get the coordinate of x based on the index of the cell
     /// @param  index_x - x index of the cell array 
@@ -148,21 +192,17 @@ class PotentialFieldGridMap
 
 
     ///
-    /// @brief check if the footprint is overlapped with the forbidden area
-    /// @return true if collision exists    
+    /// @brief check if the expected footprint is overlapped with the forbidden area
+    /// @return true if collision exists (overlapped)
+    ///    
     bool checkCollision();
 
-
+    bool checkCollisionRotate();
     ///
     /// @brief  delete the grid map
     ///
     void deleteGridMap();
-    
-    ///
-    /// @brief  initialize the cost map, set all cell to '0'
-    /// @param  size_x,size_y - cell size
-    
-    
+        
     ///
     /// @brief  delete the grid map
     ///
@@ -180,12 +220,8 @@ class PotentialFieldGridMap
     ///    
     int getCellIndex( int cell_x,  int cell_y);
 
-    pthread_mutex_t m_mutex;
     //costmap
     bool costmap_received_;
-    double resolution_; 
-    double map_width_;
-    double map_height_;
     int cell_size_x_;
     int cell_size_y_;
     bool cell_size_x_odd_;
@@ -198,10 +234,7 @@ class PotentialFieldGridMap
     int grid_size_y_;
     int* grid_map_;
     //potential field
-    double influence_radius_; 
-    int max_potential_value_;
     int step_value_;
-    double stop_threshold_;
     int forbidden_value_;
     int warn_value_;    
     //footprint

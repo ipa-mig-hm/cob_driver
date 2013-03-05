@@ -164,7 +164,10 @@ class CollisionVelocityFilter
     ///         robot and publishes command velocity to robot
     ///
     void performControllerStep();
-    void performControllerStepNew();    
+
+
+    void performControllerStepNew(); 
+   
     ///
     /// @brief  checks for obstacles in driving direction of the robot (rotation included) 
     ///         and publishes relevant obstacles
@@ -244,6 +247,9 @@ class CollisionVelocityFilter
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
     PotentialFieldGridMap potential_field_;
     int max_warn_value_;
+    bool has_rotate_;
+    // for potential field grid map
+
 }; //CollisionVelocityFilter
 
 #endif

@@ -129,6 +129,24 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   if(!nh_.hasParam("pot_ctrl_virt_mass")) ROS_WARN("Used default parameter for pot_ctrl_virt_mass [0.8]");
   nh_.param("pot_ctrl_virt_mass", virt_mass_, 0.8);
 
+  //end of parameters for Class PotentialFieldGridMap  
+  if(!nh_.hasParam("costmap_resolution")) ROS_WARN("Used default parameter for resolution [0.07]");
+  nh_.param("costmap_resolution",potential_field_.resolution_,0.07);
+  
+  if(!nh_.hasParam("map_height")) ROS_WARN("Used default parameter for map_height [5.0]");
+  nh_.param("map_height",potential_field_.map_height_,5.0);
+  
+  if(!nh_.hasParam("map_width")) ROS_WARN("Used default parameter for map_width [5.0]");
+  nh_.param("map_width",potential_field_.map_width_,5.0);
+  
+  if(!nh_.hasParam("max_potential_value")) ROS_WARN("Used default parameter for max_potential_value [250]");
+  nh_.param("map_potential_value",potential_field_.max_potential_value_,250);
+ 
+  potential_field_.influence_radius_ = influence_radius_ ;
+  potential_field_.stop_threshold_ = stop_threshold_;
+  potential_field_.initial();
+  //end of parameters configuration for Class PotentialFieldGridMap
+ 
   //load the robot footprint from the parameter server if its available in the local costmap namespace
   robot_footprint_ = loadRobotFootprint(local_costmap_nh_);
   if(robot_footprint_.size() > 4) 
@@ -175,10 +193,10 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   generatePotentialField();
    
   if(collisionPreCalculate() == false) {
-    ROS_INFO("cannot move any way");
+    printf("no move\n");
     stopMovement();
   }
-  else{
+  else{ 
     performControllerStep();
 
     // check for relevant obstacles
@@ -192,21 +210,17 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
 void CollisionVelocityFilter::generatePotentialField(){
   potential_field_.initCostMap();
   potential_field_.getCostMap(last_costmap_received_);
-  // pf.testPrintOut();
   potential_field_.cellPFLinearGeneration();
-  // pf.testPrintOut();
-  //pf.deleteCostMap();
   potential_field_.getPotentialWarn();
   potential_field_.getPotentialForbidden();  
   topic_pub_potential_field_warn_.publish(potential_field_.potential_field_warn_);
   topic_pub_potential_field_forbidden_.publish(potential_field_.potential_field_forbidden_);
-  //potential_field_.findClosestLine();
 }
 
 bool CollisionVelocityFilter::collisionPreCalculate(){
   bool has_collision = true;
   bool in_range = true;
-  if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0) return in_range;
+  if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0 && robot_twist_angular_.z ==0) return in_range;
 else{
   std::vector<geometry_msgs::Point> robot_footprint;
   geometry_msgs::Vector3 robot_twist_linear = robot_twist_linear_;
@@ -216,6 +230,15 @@ else{
   pthread_mutex_lock(&m_mutex);
   robot_footprint = robot_footprint_; 
   pthread_mutex_unlock(&m_mutex);
+  
+  if(robot_twist_angular_.z!=0){
+    has_rotate_ = true;
+    if(potential_field_.collisionByRotation(robot_twist_angular_.z,robot_footprint)){ 
+    return false; 
+    }    
+    return true;
+  }  
+    
   while(has_collision && in_range){
     has_collision = potential_field_.collisionPreCalculate(robot_twist_linear,robot_footprint);
     if(has_collision){
@@ -473,14 +496,25 @@ void CollisionVelocityFilter::performControllerStep() {
 */
 // TODO
 void CollisionVelocityFilter::performControllerStep() {
-  ROS_INFO("max_value is now %d",max_warn_value_);
+  if(max_warn_value_ == 250) ROS_WARN("find footprint inside the obstacle!");
+  else if(max_warn_value_ == 238) ROS_WARN("already inside the forbidden area!");
+  else  ROS_INFO("max_value is now %d",max_warn_value_);
+  
   geometry_msgs::Twist cmd_vel;
   cmd_vel.angular = robot_twist_angular_;
+  if(has_rotate_) {
+  cmd_vel.linear.x = 0;
+  cmd_vel.linear.y = 0;
+  cmd_vel.linear.z = 0;
+  has_rotate_ = false;
+  }
+  else{
   cmd_vel.linear.x = robot_twist_linear_.x * 0.30 + (robot_twist_linear_.x * ((226.00f - max_warn_value_)/226.00f)); 
   cmd_vel.linear.y = robot_twist_linear_.y * 0.30 + (robot_twist_linear_.y * ((226.00f - max_warn_value_)/226.00f));
   cmd_vel.linear.z = 0;
   if(fabs(cmd_vel.linear.x)>fabs(robot_twist_linear_.x))  cmd_vel.linear.x = robot_twist_linear_.x;
   if(fabs(cmd_vel.linear.y)>fabs(robot_twist_linear_.y))  cmd_vel.linear.y = robot_twist_linear_.y;
+  }
   ROS_INFO("publish command is %f,%f\n",cmd_vel.linear.x,cmd_vel.linear.y);
   topic_pub_command_.publish(cmd_vel); 
 
