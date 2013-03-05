@@ -252,6 +252,25 @@ bool PotentialFieldGridMap::collisionByRotation(double angular,const std::vector
    geometry_msgs::Point pt;
    std::vector<geometry_msgs::Point> new_footprint;
    new_footprint.clear();  
+   //TODO check the footprint after a 4.5 and a  9 degree ratation.
+   for(unsigned int i=0; i<footprint.size(); i++){
+   angle = atan2(footprint[i].y,footprint[i].x);
+   radius = sqrt(footprint[i].x*footprint[i].x + footprint[i].y*footprint[i].y);
+   //printf("angle:%f,radius:%f\n",angle,radius);
+   if(angular > 0)  angle = angle + M_PI/40; 
+   else angle = angle - M_PI/40;
+   pt.x = radius * cos(angle);
+   pt.y = radius * sin(angle);
+   pt.z = 0; 
+   new_footprint.push_back(pt);
+  }
+    
+   getFootPrintCells(new_footprint);
+   if(checkCollision()) return true; 
+   else {
+   new_footprint.clear();  
+   } 
+
    for(unsigned int i=0; i<footprint.size(); i++){
    angle = atan2(footprint[i].y,footprint[i].x);
    radius = sqrt(footprint[i].x*footprint[i].x + footprint[i].y*footprint[i].y);
@@ -263,6 +282,7 @@ bool PotentialFieldGridMap::collisionByRotation(double angular,const std::vector
    pt.z = 0; 
    new_footprint.push_back(pt);
   }
+
   getFootPrintCells(new_footprint);
   return (checkCollision());
 }
@@ -297,7 +317,7 @@ bool PotentialFieldGridMap::checkCollision(){
     for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){
       index_x = footprint_line_[i].index_x_[j];
       index_y = footprint_line_[i].index_y_[j];
-      if(cost_map_[getCellIndex(index_x,index_y)] >= forbidden_value_)
+      if(cost_map_[getCellIndex(index_x,index_y)] > forbidden_value_)
       in_forbidden_area = true;
       
     }          

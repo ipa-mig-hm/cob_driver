@@ -193,7 +193,7 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   generatePotentialField();
    
   if(collisionPreCalculate() == false) {
-    printf("no move\n");
+    //printf("no move\n");
     stopMovement();
   }
   else{ 
@@ -498,7 +498,7 @@ void CollisionVelocityFilter::performControllerStep() {
 void CollisionVelocityFilter::performControllerStep() {
   if(max_warn_value_ == 250) ROS_WARN("find footprint inside the obstacle!");
   else if(max_warn_value_ == 238) ROS_WARN("already inside the forbidden area!");
-  else  ROS_INFO("max_value is now %d",max_warn_value_);
+  //else  ROS_INFO("max_value is now %d",max_warn_value_);
   
   geometry_msgs::Twist cmd_vel;
   cmd_vel.angular = robot_twist_angular_;
@@ -515,7 +515,7 @@ void CollisionVelocityFilter::performControllerStep() {
   if(fabs(cmd_vel.linear.x)>fabs(robot_twist_linear_.x))  cmd_vel.linear.x = robot_twist_linear_.x;
   if(fabs(cmd_vel.linear.y)>fabs(robot_twist_linear_.y))  cmd_vel.linear.y = robot_twist_linear_.y;
   }
-  ROS_INFO("publish command is %f,%f\n",cmd_vel.linear.x,cmd_vel.linear.y);
+  //ROS_INFO("publish command is %f,%f\n",cmd_vel.linear.x,cmd_vel.linear.y);
   topic_pub_command_.publish(cmd_vel); 
 
 }
