@@ -156,6 +156,7 @@ class PotentialFieldGridMap
     double map_width_;
     double map_height_;
     int max_potential_value_;
+    int forbidden_value_;
     
     void initial(); 
   private: 
@@ -235,7 +236,6 @@ class PotentialFieldGridMap
     int* grid_map_;
     //potential field
     int step_value_;
-    int forbidden_value_;
     int warn_value_;    
     //footprint
     double closest_line_orth_angle_;	

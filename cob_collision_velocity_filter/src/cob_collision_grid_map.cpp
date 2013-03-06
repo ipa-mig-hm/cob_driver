@@ -45,8 +45,15 @@ void PotentialFieldGridMap::initial(){
   cell_size_x_ = map_width_ / resolution_;
   cell_size_y_ = map_height_ / resolution_;
   step_value_  = max_potential_value_ / ((influence_radius_ / resolution_) - 1);
-  forbidden_value_ = max_potential_value_ - (stop_threshold_ / resolution_) * step_value_;
+  forbidden_value_ = max_potential_value_ - int(stop_threshold_ / resolution_) * step_value_;
   warn_value_ = max_potential_value_ - ((influence_radius_ - 0.5) / resolution_) * step_value_;
+
+  ROS_INFO("cell_size_x_= %d cell_size_y_= %d",cell_size_x_, cell_size_y_);
+  ROS_INFO("max_potential_value is %d",max_potential_value_);
+  ROS_INFO("step value is %d",step_value_);
+  ROS_INFO("stop_threshold is %f",stop_threshold_);
+  ROS_INFO("forbidden value is %d",forbidden_value_);
+  
 
   if((cell_size_x_%2)==1) cell_size_x_odd_ = true;
   else cell_size_x_odd_ = false;
@@ -254,37 +261,21 @@ bool PotentialFieldGridMap::collisionByRotation(double angular,const std::vector
    new_footprint.clear();  
    //TODO check the footprint after a 4.5 and a  9 degree ratation.
    for(unsigned int i=0; i<footprint.size(); i++){
-   angle = atan2(footprint[i].y,footprint[i].x);
-   radius = sqrt(footprint[i].x*footprint[i].x + footprint[i].y*footprint[i].y);
-   //printf("angle:%f,radius:%f\n",angle,radius);
-   if(angular > 0)  angle = angle + M_PI/40; 
-   else angle = angle - M_PI/40;
-   pt.x = radius * cos(angle);
-   pt.y = radius * sin(angle);
-   pt.z = 0; 
-   new_footprint.push_back(pt);
-  }
+     angle = atan2(footprint[i].y,footprint[i].x);
+     radius = sqrt(footprint[i].x*footprint[i].x + footprint[i].y*footprint[i].y);
+     //printf("angle:%f,radius:%f\n",angle,radius);
+     if(angular > 0)  angle = angle + M_PI/40; 
+     else angle = angle - M_PI/40;
+     pt.x = radius * cos(angle);
+     pt.y = radius * sin(angle);
+     pt.z = 0; 
+     new_footprint.push_back(pt);
+   }
     
    getFootPrintCells(new_footprint);
+   //return true if collision exists
    if(checkCollision()) return true; 
-   else {
-   new_footprint.clear();  
-   } 
-
-   for(unsigned int i=0; i<footprint.size(); i++){
-   angle = atan2(footprint[i].y,footprint[i].x);
-   radius = sqrt(footprint[i].x*footprint[i].x + footprint[i].y*footprint[i].y);
-   //printf("angle:%f,radius:%f\n",angle,radius);
-   if(angular > 0)  angle = angle + M_PI/20; 
-   else angle = angle - M_PI/20;
-   pt.x = radius * cos(angle);
-   pt.y = radius * sin(angle);
-   pt.z = 0; 
-   new_footprint.push_back(pt);
-  }
-
-  getFootPrintCells(new_footprint);
-  return (checkCollision());
+   else return false;
 }
 
 
