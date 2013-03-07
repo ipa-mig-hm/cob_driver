@@ -191,7 +191,8 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   pthread_mutex_unlock(&m_mutex);
   // generate the potential field grid map
   generatePotentialField();
-   
+  
+ 
   if(collisionPreCalculate() == false) {
     //printf("no move\n");
     stopMovement();
@@ -219,11 +220,12 @@ void CollisionVelocityFilter::generatePotentialField(){
   topic_pub_potential_field_forbidden_.publish(potential_field_.potential_field_forbidden_);
 }
 
+
+
+//return true when collision can be avoided
 bool CollisionVelocityFilter::collisionPreCalculate(){
   bool has_collision = true;
   bool in_range = true;
-  if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0 && robot_twist_angular_.z ==0) return in_range;
-else{
   std::vector<geometry_msgs::Point> robot_footprint;
   geometry_msgs::Vector3 robot_twist_linear = robot_twist_linear_;
   double vel_angle = atan2(robot_twist_linear_.y, robot_twist_linear_.x);
@@ -232,49 +234,65 @@ else{
   pthread_mutex_lock(&m_mutex);
   robot_footprint = robot_footprint_; 
   pthread_mutex_unlock(&m_mutex);
-  
-  if(robot_twist_angular_.z!=0){
-    has_rotate_ = true;
+
+  //no command
+  if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0 && robot_twist_angular_.z ==0) return true;
+  //stop rotation when translation exists
+  if(robot_twist_linear_.x!=0 || robot_twist_linear_.y!=0){
+    robot_twist_angular_.z = 0;
+    //check the footprint in 0 to -75 degree
+    while(has_collision && in_range){
+      has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint);
+      if(has_collision){
+        //ROS_INFO("need to change velocity");
+        rotate_angle = rotate_angle - (M_PI / 180.0f);
+        // ROS_INFO("rotate_angle is now %f",rotate_angle);
+        if(rotate_angle < -M_PI/2.4) in_range = false; 
+        else modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
+      }
+    }    
+    //now try the footprint in 0 to 75 degree
+    in_range = true;
+    rotate_angle = 0;
+    while(has_collision && in_range){
+      rotate_angle = rotate_angle + (M_PI / 180.0f);
+      if(rotate_angle > M_PI/2.4) in_range = false;
+      else{
+        modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
+        has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint);
+      }
+    }
+   
+    //if in_range is true, the robot is allow to move
+    if(in_range) {
+      robot_twist_linear_ = robot_twist_linear;
+      max_warn_value_ =  potential_field_.findWarnValue(robot_twist_linear_);
+     }
+    
+    return in_range;    
+  }
+
+  //only rotation exists
+  else{
+    //always allow small rotation
+    if(fabs(robot_twist_angular_.z) < use_circumscribed_threshold_) return true;
+    //check collision after rotation
     if(potential_field_.collisionByRotation(robot_twist_angular_.z,robot_footprint)){ 
     return false; 
     }    
     return true;
-  }  
-    
-  while(has_collision && in_range){
-    has_collision = potential_field_.collisionPreCalculate(robot_twist_linear,robot_footprint);
-    if(has_collision){
-      //ROS_INFO("need to change velocity");
-      rotate_angle = rotate_angle - (M_PI / 180.0f);
-      // ROS_INFO("rotate_angle is now %f",rotate_angle);
-      if(rotate_angle < -M_PI/2.4) in_range = false; 
-      else modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
-    }
-  }
-  in_range = true;
-  rotate_angle = 0;
-  while(has_collision && in_range){
-    rotate_angle = rotate_angle + (M_PI / 180.0f);
-    if(rotate_angle > M_PI/2.4) in_range = false;
-    else{
-      modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
-      has_collision = potential_field_.collisionPreCalculate(robot_twist_linear,robot_footprint);
-    }
-   }
-  //if in_range is true, the robot is allow to move
-  if(in_range) {
-    robot_twist_linear_ = robot_twist_linear;
-    max_warn_value_ =  potential_field_.findWarnValue(robot_twist_linear_);
-  }
-  return in_range;}
+  }     
+  
 }
+
+
+
 
 void CollisionVelocityFilter::modifyCommand(double rotate_angle, geometry_msgs::Vector3& robot_twist_linear,double vel_angle,double vel_length){
   double new_vel_angle = vel_angle + rotate_angle;
   robot_twist_linear.x = vel_length * cos(new_vel_angle);
   robot_twist_linear.y = vel_length * sin(new_vel_angle);
-  //ROS_INFO("modifeid command x:%f,y:%f",robot_twist_linear.x,robot_twist_linear.y);
- 
+  //ROS_INFO("modifeid command x:%f,y:%f",robot_twist_linear.x,robot_twist_linear.y); 
 }
 
 // obstaclesCB reads obstacles from costmap
@@ -373,309 +391,35 @@ void CollisionVelocityFilter::performControllerStepNew() {
   vy_max = v_max_ * fabs(sin(vel_angle));
   if (vy_max < fabs(cmd_vel.linear.y)) cmd_vel.linear.y = sign(cmd_vel.linear.y) * vy_max;
     
-  
 }
 
 
-
-
-// sets corrected velocity of joystick command 
-/*
 void CollisionVelocityFilter::performControllerStep() {
 
-  double dt;
-  double vx_max, vy_max;
-  geometry_msgs::Twist cmd_vel,cmd_vel_in;
-   
+ // if(max_warn_value_ == potential_field_.max_potential_value_) ROS_WARN("find footprint inside the obstacle!");
+//  if(max_warn_value_ == potential_field_.forbidden_value_) ROS_WARN("already inside the forbidden area!");
+//  else  ROS_INFO("max_value is now %d",max_warn_value_);
 
-  cmd_vel_in.linear = robot_twist_linear_;
-  cmd_vel_in.angular = robot_twist_angular_;
-
-  cmd_vel.linear = robot_twist_linear_;
-  cmd_vel.angular = robot_twist_angular_;
-  dt = ros::Time::now().toSec() - last_time_;
-  last_time_ = ros::Time::now().toSec();
-
-  double vel_angle = atan2(cmd_vel.linear.y,cmd_vel.linear.x);
-  vx_max = v_max_ * fabs(cos(vel_angle));
-  if (vx_max > fabs(cmd_vel.linear.x)) vx_max = fabs(cmd_vel.linear.x);
-  vy_max = v_max_ * fabs(sin(vel_angle));
-  if (vy_max > fabs(cmd_vel.linear.y)) vy_max = fabs(cmd_vel.linear.y);
-
-  //Slow down in any way while approximating an obstacle:
-  if(closest_obstacle_dist_ < influence_radius_) {
-    double F_x, F_y;
-    double vx_d, vy_d, vx_factor, vy_factor;
-    double kv_obst=kv_, vx_max_obst=vx_max, vy_max_obst=vy_max;
-
-    //implementation for linear decrease of v_max:
-    double obstacle_linear_slope_x = vx_max / (obstacle_damping_dist_ - stop_threshold_);
-    vx_max_obst = (closest_obstacle_dist_- stop_threshold_ + stop_threshold_/10.0f) * obstacle_linear_slope_x;
-    if(vx_max_obst > vx_max) vx_max_obst = vx_max;
-    else if(vx_max_obst < 0.0f) vx_max_obst = 0.0f;
-
-    double obstacle_linear_slope_y = vy_max / (obstacle_damping_dist_ - stop_threshold_);
-    vy_max_obst = (closest_obstacle_dist_- stop_threshold_ + stop_threshold_/10.0f) * obstacle_linear_slope_y;
-    if(vy_max_obst > vy_max) vy_max_obst = vy_max;
-    else if(vy_max_obst < 0.0f) vy_max_obst = 0.0f;
-
-    //Translational movement
-    //calculation of v factor to limit maxspeed
-    double closest_obstacle_dist_x = closest_obstacle_dist_ * cos(closest_obstacle_angle_);
-    double closest_obstacle_dist_y = closest_obstacle_dist_ * sin(closest_obstacle_angle_);
-    vx_d = kp_/kv_obst * closest_obstacle_dist_x;
-    vy_d = kp_/kv_obst * closest_obstacle_dist_y;
-    vx_factor = vx_max_obst / sqrt(vy_d*vy_d + vx_d*vx_d);
-    vy_factor = vy_max_obst / sqrt(vy_d*vy_d + vx_d*vx_d);
-    if(vx_factor > 1.0) vx_factor = 1.0;
-    if(vy_factor > 1.0) vy_factor = 1.0;
-
-    F_x = - kv_obst * vx_last_ + vx_factor * kp_ * closest_obstacle_dist_x;
-    F_y = - kv_obst * vy_last_ + vy_factor * kp_ * closest_obstacle_dist_y;
-
-    cmd_vel.linear.x = vx_last_ + F_x / virt_mass_ * dt;
-    cmd_vel.linear.y = vy_last_ + F_y / virt_mass_ * dt;
-
-  }
-
-  // make sure, the computed and commanded velocities are not greater than the specified max velocities
-  if (fabs(cmd_vel.linear.x) > vx_max) cmd_vel.linear.x = sign(cmd_vel.linear.x) * vx_max;
-  if (fabs(cmd_vel.linear.y) > vy_max) cmd_vel.linear.y = sign(cmd_vel.linear.y) * vy_max;
-  if (fabs(cmd_vel.angular.z) > vtheta_max_) cmd_vel.angular.z = sign(cmd_vel.angular.z) * vtheta_max_;
-
-  // limit acceleration:
-  // only acceleration (in terms of speeding up in any direction) is limited,
-  // deceleration (in terms of slowing down) is handeled either by cob_teleop or the potential field
-  // like slow-down behaviour above
-  if (fabs(cmd_vel.linear.x) > fabs(vx_last_))
-  {
-    if ((cmd_vel.linear.x - vx_last_)/dt > ax_max_)
-      cmd_vel.linear.x = vx_last_ + ax_max_ * dt;
-    else if((cmd_vel.linear.x - vx_last_)/dt < -ax_max_)
-      cmd_vel.linear.x = vx_last_ - ax_max_ * dt;
-  }
-  if (fabs(cmd_vel.linear.y) > fabs(vy_last_))
-  {
-    if ((cmd_vel.linear.y - vy_last_)/dt > ay_max_)
-      cmd_vel.linear.y = vy_last_ + ay_max_ * dt;
-    else if ((cmd_vel.linear.y - vy_last_)/dt < -ay_max_)
-      cmd_vel.linear.y = vy_last_ - ay_max_ * dt;
-  }
-  if (fabs(cmd_vel.angular.z) > fabs(vtheta_last_))
-  {
-    if ((cmd_vel.angular.z - vtheta_last_)/dt > atheta_max_)
-      cmd_vel.angular.z = vtheta_last_ + atheta_max_ * dt;
-    else if ((cmd_vel.angular.z - vtheta_last_)/dt < -atheta_max_)
-      cmd_vel.angular.z = vtheta_last_ - atheta_max_ * dt;
-  }
-
-  pthread_mutex_lock(&m_mutex);
-  vx_last_ = cmd_vel.linear.x;
-  vy_last_ = cmd_vel.linear.y;
-  vtheta_last_ = cmd_vel.angular.z;
-  pthread_mutex_unlock(&m_mutex);
-
-  velocity_limited_marker_.publishMarkers(cmd_vel_in.linear.x, cmd_vel.linear.x, cmd_vel_in.linear.y, cmd_vel.linear.y, cmd_vel_in.angular.z, cmd_vel.angular.z);
-
-  
-
-  // if closest obstacle is within stop_threshold, then do not move
-  if( closest_obstacle_dist_ < stop_threshold_ ) {
-    stopMovement();
-  }
-  
-  else
-  {
-    // publish adjusted velocity 
-    topic_pub_command_.publish(cmd_vel);  
-  }
-  return;
-}
-*/
-// TODO
-void CollisionVelocityFilter::performControllerStep() {
-  if(max_warn_value_ == potential_field_.max_potential_value_) ROS_WARN("find footprint inside the obstacle!");
-  if(max_warn_value_ == potential_field_.forbidden_value_) ROS_WARN("already inside the forbidden area!");
-  else  ROS_INFO("max_value is now %d",max_warn_value_);
-  
   geometry_msgs::Twist cmd_vel;
-  cmd_vel.angular = robot_twist_angular_;
-  if(has_rotate_) {
-  cmd_vel.linear.x = 0;
-  cmd_vel.linear.y = 0;
-  cmd_vel.linear.z = 0;
-  has_rotate_ = false;
-  }
-  else{
+  cmd_vel.angular = robot_twist_angular_; 
   cmd_vel.linear.x = robot_twist_linear_.x * 0.2 + (robot_twist_linear_.x * ((241.00f - max_warn_value_)/241.00f)); 
   cmd_vel.linear.y = robot_twist_linear_.y * 0.2 + (robot_twist_linear_.y * ((241.00f - max_warn_value_)/241.00f));
   cmd_vel.linear.z = 0;
   if(fabs(cmd_vel.linear.x)>fabs(robot_twist_linear_.x))  cmd_vel.linear.x = robot_twist_linear_.x;
   if(fabs(cmd_vel.linear.y)>fabs(robot_twist_linear_.y))  cmd_vel.linear.y = robot_twist_linear_.y;
-  }
+  
   //ROS_INFO("publish command is %f,%f\n",cmd_vel.linear.x,cmd_vel.linear.y);
   topic_pub_command_.publish(cmd_vel); 
 
 }
 
-
-
-/*
-void CollisionVelocityFilter::obstacleHandler() {
-  pthread_mutex_lock(&m_mutex);
-  if(!costmap_received_) {
-    ROS_WARN("No costmap has been received by cob_collision_velocity_filter, the robot will drive without obstacle avoidance!");
-    closest_obstacle_dist_ = influence_radius_;
-
-    pthread_mutex_unlock(&m_mutex);
-    return;
-  }
-  closest_obstacle_dist_ = influence_radius_;
-  pthread_mutex_unlock(&m_mutex);
-
-  double cur_distance_to_center, cur_distance_to_border;
-  double obstacle_theta_robot, obstacle_delta_theta_robot, obstacle_dist_vel_dir;
-  bool cur_obstacle_relevant;
-  geometry_msgs::Point cur_obstacle_robot;
-  geometry_msgs::Point zero_position;
-  zero_position.x=0.0f;  
-  zero_position.y=0.0f;
-  zero_position.z=0.0f;
-  bool use_circumscribed=true, use_tube=true;
-
-  //Calculate corner angles in robot_frame:
-  double corner_front_left, corner_rear_left, corner_rear_right, corner_front_right;
-  corner_front_left = atan2(footprint_left_, footprint_front_);
-  corner_rear_left = atan2(footprint_left_, footprint_rear_);
-  corner_rear_right = atan2(footprint_right_, footprint_rear_);
-  corner_front_right = atan2(footprint_right_, footprint_front_);
-
-  //Decide, whether circumscribed or tube argument should be used for filtering:
-  if(fabs(robot_twist_linear_.x) <= 0.005f && fabs(robot_twist_linear_.y) <= 0.005f) {
-    use_tube = false;
-    //disable tube filter at very slow velocities
-  }
-  if(!use_tube) {
-    if( fabs(robot_twist_angular_.z) <= 0.01f) {
-      use_circumscribed = false;
-    } //when tube filter inactive, start circumscribed filter at very low rot-velocities
-  } else {
-    if( fabs(robot_twist_angular_.z) <= use_circumscribed_threshold_) {
-      use_circumscribed = false;
-    } //when tube filter running, disable circum-filter in a wider range of rot-velocities
-  } 
-
-  //Calculation of tube in driving-dir considered for obstacle avoidence
-  double velocity_angle=0.0f, velocity_ortho_angle;
-  double corner_angle, delta_corner_angle;
-  double ortho_corner_dist;
-  double tube_left_border = 0.0f, tube_right_border = 0.0f;
-  double tube_left_origin = 0.0f, tube_right_origin = 0.0f;
-  double corner_dist, circumscribed_radius = 0.0f;
-
-  for(unsigned i = 0; i<robot_footprint_.size(); i++) {
-    corner_dist = sqrt(robot_footprint_[i].x*robot_footprint_[i].x + robot_footprint_[i].y*robot_footprint_[i].y);
-    if(corner_dist > circumscribed_radius) circumscribed_radius = corner_dist;
-  }
-
-  if(use_tube) {
-    //use commanded vel-value for vel-vector direction.. ?
-    velocity_angle = atan2(robot_twist_linear_.y, robot_twist_linear_.x);
-    velocity_ortho_angle = velocity_angle + M_PI / 2.0f;
-
-    for(unsigned i = 0; i<robot_footprint_.size(); i++) {
-      corner_angle = atan2(robot_footprint_[i].y, robot_footprint_[i].x);
-      delta_corner_angle = velocity_ortho_angle - corner_angle;
-      corner_dist = sqrt(robot_footprint_[i].x*robot_footprint_[i].x + robot_footprint_[i].y*robot_footprint_[i].y);
-      ortho_corner_dist = cos(delta_corner_angle) * corner_dist;
-
-      if(ortho_corner_dist < tube_right_border) {
-        tube_right_border = ortho_corner_dist;
-        tube_right_origin = sin(delta_corner_angle) * corner_dist;
-      } else if(ortho_corner_dist > tube_left_border) {
-        tube_left_border = ortho_corner_dist;
-        tube_left_origin = sin(delta_corner_angle) * corner_dist;
-      }
-    }
-  }
-
-  //find relevant obstacles
-  pthread_mutex_lock(&m_mutex);
-  relevant_obstacles_.header = last_costmap_received_.header;
-  relevant_obstacles_.cell_width = last_costmap_received_.cell_width;
-  relevant_obstacles_.cell_height = last_costmap_received_.cell_height;
-  relevant_obstacles_.cells.clear();
-
-  for(unsigned int i = 0; i < last_costmap_received_.cells.size(); i++) {
-    cur_obstacle_relevant = false;
-    cur_distance_to_center = getDistance2d(zero_position, last_costmap_received_.cells[i]);
-    //check whether current obstacle lies inside the circumscribed_radius of the robot -> prevent collisions while rotating
-    if(use_circumscribed && cur_distance_to_center <= circumscribed_radius) {
-      cur_obstacle_robot = last_costmap_received_.cells[i];
-
-      if( obstacleValid(cur_obstacle_robot.x, cur_obstacle_robot.y) ) {
-        cur_obstacle_relevant = true;
-        relevant_obstacles_.cells.push_back(last_costmap_received_.cells[i]);
-        obstacle_theta_robot = atan2(cur_obstacle_robot.y, cur_obstacle_robot.x);
-      }
-
-      //for each obstacle, now check whether it lies in the tube or not:
-    } else if(use_tube && cur_distance_to_center < influence_radius_) {
-      cur_obstacle_robot = last_costmap_received_.cells[i];
-
-      if( obstacleValid(cur_obstacle_robot.x, cur_obstacle_robot.y) ) {
-        obstacle_theta_robot = atan2(cur_obstacle_robot.y, cur_obstacle_robot.x);
-        obstacle_delta_theta_robot = obstacle_theta_robot - velocity_angle;
-        obstacle_dist_vel_dir = sin(obstacle_delta_theta_robot) * cur_distance_to_center;
-
-        if(obstacle_dist_vel_dir <= tube_left_border && obstacle_dist_vel_dir >= tube_right_border) {
-          //found obstacle that lies inside of observation tube
-
-          if( sign(obstacle_dist_vel_dir) >= 0) { 
-            if(cos(obstacle_delta_theta_robot) * cur_distance_to_center >= tube_left_origin) {
-              //relevant obstacle in tube found
-              cur_obstacle_relevant = true;
-              relevant_obstacles_.cells.push_back(last_costmap_received_.cells[i]);
-            }
-          } else { // obstacle in right part of tube
-            if(cos(obstacle_delta_theta_robot) * cur_distance_to_center >= tube_right_origin) {
-              //relevant obstacle in tube found
-              cur_obstacle_relevant = true;
-              relevant_obstacles_.cells.push_back(last_costmap_received_.cells[i]);
-            }
-          }
-        }
-      }
-    }
-    
-    if(cur_obstacle_relevant) { //now calculate distance of current, relevant obstacle to robot
-      if(obstacle_theta_robot >= corner_front_right && obstacle_theta_robot < corner_front_left) {
-        //obstacle in front:
-        cur_distance_to_border = cur_distance_to_center - fabs(footprint_front_) / fabs(cos(obstacle_theta_robot));
-      } else if(obstacle_theta_robot >= corner_front_left && obstacle_theta_robot < corner_rear_left) {
-        //obstacle left:
-        cur_distance_to_border = cur_distance_to_center - fabs(footprint_left_) / fabs(sin(obstacle_theta_robot));
-      } else if(obstacle_theta_robot >= corner_rear_left || obstacle_theta_robot < corner_rear_right) {
-        //obstacle in rear:
-        cur_distance_to_border = cur_distance_to_center - fabs(footprint_rear_) / fabs(cos(obstacle_theta_robot));
-      } else {
-        //obstacle right:
-        cur_distance_to_border = cur_distance_to_center - fabs(footprint_right_) / fabs(sin(obstacle_theta_robot));
-      }
-
-      if(cur_distance_to_border < closest_obstacle_dist_) {
-        closest_obstacle_dist_ = cur_distance_to_border;
-        closest_obstacle_angle_ = obstacle_theta_robot;
-      }
-    }	
-  }
-  pthread_mutex_unlock(&m_mutex);
-
-  topic_pub_relevant_obstacles_.publish(relevant_obstacles_);
+void CollisionVelocityFilter::stopMovement() {
+  geometry_msgs::Twist stop_twist;
+  printf("cannot move!");
+  stop_twist.linear.x = 0.0f; stop_twist.linear.y = 0.0f; stop_twist.linear.z = 0.0f;
+  stop_twist.angular.x = 0.0f; stop_twist.angular.y = 0.0f; stop_twist.linear.z = 0.0f;
+  topic_pub_command_.publish(stop_twist);
 }
-
-*/
-
 
 // load robot footprint from costmap_2d_ros to keep same footprint format
 std::vector<geometry_msgs::Point> CollisionVelocityFilter::loadRobotFootprint(ros::NodeHandle node){
@@ -840,15 +584,6 @@ bool CollisionVelocityFilter::obstacleValid(double x_obstacle, double y_obstacle
   return true;
 }
 
-void CollisionVelocityFilter::stopMovement() {
-  geometry_msgs::Twist stop_twist;
-  stop_twist.linear.x = 0.0f; stop_twist.linear.y = 0.0f; stop_twist.linear.z = 0.0f;
-  stop_twist.angular.x = 0.0f; stop_twist.angular.y = 0.0f; stop_twist.linear.z = 0.0f;
-  topic_pub_command_.publish(stop_twist);
-  vx_last_ = 0.0;
-  vy_last_ = 0.0;
-  vtheta_last_ = 0.0;
-}
 
 //#######################
 //#### main programm ####

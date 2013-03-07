@@ -247,7 +247,6 @@ class CollisionVelocityFilter
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
     PotentialFieldGridMap potential_field_;
     int max_warn_value_;
-    bool has_rotate_;
     // for potential field grid map
 
 }; //CollisionVelocityFilter

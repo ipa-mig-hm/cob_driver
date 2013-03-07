@@ -270,8 +270,7 @@ bool PotentialFieldGridMap::collisionByRotation(double angular,const std::vector
      pt.y = radius * sin(angle);
      pt.z = 0; 
      new_footprint.push_back(pt);
-   }
-    
+   } 
    getFootPrintCells(new_footprint);
    //return true if collision exists
    if(checkCollision()) return true; 
@@ -279,11 +278,12 @@ bool PotentialFieldGridMap::collisionByRotation(double angular,const std::vector
 }
 
 
-bool PotentialFieldGridMap::collisionPreCalculate(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint){
+bool PotentialFieldGridMap::collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint){
   //simulate a new footprint 
   double vel_angle = atan2(cmd_vel.y, cmd_vel.x);
-  double x_offset = cos(vel_angle) * stop_threshold_ ; 
-  double y_offset = sin(vel_angle) * stop_threshold_ ;
+  //TODO choose a different stop_threshold 
+  double x_offset = cos(vel_angle) * stop_threshold_ * 0.5 ; 
+  double y_offset = sin(vel_angle) * stop_threshold_ * 0.5 ;
   //ROS_INFO("x_offset:%f,y_offset:%f",x_offset,y_offset);
   std::vector<geometry_msgs::Point> new_footprint;
   new_footprint.clear();
@@ -299,21 +299,19 @@ bool PotentialFieldGridMap::collisionPreCalculate(const geometry_msgs::Vector3& 
   return (checkCollision());
 }
 
-
+//return true if collision is detected 
 bool PotentialFieldGridMap::checkCollision(){
   int index_x,index_y;
-  bool in_forbidden_area = false; 
   for(unsigned int i=0;i<footprint_line_.size();i++){ 
-    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] == forbidden_value_) in_forbidden_area = true; 
+    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] == forbidden_value_) return true; 
     for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){
       index_x = footprint_line_[i].index_x_[j];
       index_y = footprint_line_[i].index_y_[j];
-      if(cost_map_[getCellIndex(index_x,index_y)] > forbidden_value_)
-      in_forbidden_area = true;
+      if(cost_map_[getCellIndex(index_x,index_y)] >= forbidden_value_) return true;
       
     }          
   }
-  return in_forbidden_area;
+  return false;
 }
 
 

@@ -135,7 +135,7 @@ class PotentialFieldGridMap
     /// @param footprint - robot footprint          
     /// @return true if collision will happen
     ///        
-    bool collisionPreCalculate(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
+    bool collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
 
     bool collisionByRotation(double angular,const std::vector<geometry_msgs::Point>& footprint);
 
