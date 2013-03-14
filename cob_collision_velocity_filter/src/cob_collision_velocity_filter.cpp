@@ -102,7 +102,7 @@ CollisionVelocityFilter::CollisionVelocityFilter()
 
   // parameters for obstacle avoidence and velocity adjustment
   if(!nh_.hasParam("stop_threshold")) ROS_WARN("Used default parameter for stop_threshold [0.1 m]");
-  nh_.param("stop_threshold", stop_threshold_, 0.10);
+  nh_.param("stop_threshold", stop_threshold_, 0.15);
 
   if(!nh_.hasParam("obstacle_damping_dist")) ROS_WARN("Used default parameter for obstacle_damping_dist [5.0 m]");
   nh_.param("obstacle_damping_dist", obstacle_damping_dist_, 5.0);
@@ -110,9 +110,6 @@ CollisionVelocityFilter::CollisionVelocityFilter()
     obstacle_damping_dist_ = stop_threshold_ + 0.01; // set to stop_threshold_+0.01 to avoid divide by zero error
     ROS_WARN("obstacle_damping_dist <= stop_threshold -> robot will stop without decceleration!");
   }
-
-  if(!nh_.hasParam("use_circumscribed_threshold")) ROS_WARN("Used default parameter for use_circumscribed_threshold_ [0.2 rad/s]");
-  nh_.param("use_circumscribed_threshold", use_circumscribed_threshold_, 0.20);
 
   if(!nh_.hasParam("pot_ctrl_vmax")) ROS_WARN("Used default parameter for pot_ctrl_vmax [0.6]");
   nh_.param("pot_ctrl_vmax", v_max_, 0.6);
@@ -129,9 +126,9 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   if(!nh_.hasParam("pot_ctrl_virt_mass")) ROS_WARN("Used default parameter for pot_ctrl_virt_mass [0.8]");
   nh_.param("pot_ctrl_virt_mass", virt_mass_, 0.8);
 
-  //parameters for Class PotentialFieldGridMap  
+  //parameters for Class PotentialFieldCostMap  
   if(!nh_.hasParam("costmap_resolution")) ROS_WARN("Used default parameter for resolution [0.07]");
-  nh_.param("costmap_resolution",potential_field_.resolution_,0.07);
+  nh_.param("costmap_resolution",potential_field_.resolution_,0.07); 
   
   if(!nh_.hasParam("map_height")) ROS_WARN("Used default parameter for map_height [5.0]");
   nh_.param("map_height",potential_field_.map_height_,5.0);
@@ -145,7 +142,7 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   potential_field_.influence_radius_ = influence_radius_ ;
   potential_field_.stop_threshold_ = stop_threshold_;
   potential_field_.initial();
-  //end of parameters configuration for Class PotentialFieldGridMap
+  //end of parameters configuration for Class PotentialFieldCostMap
  
   //load the robot footprint from the parameter server if its available in the local costmap namespace
   robot_footprint_ = loadRobotFootprint(local_costmap_nh_);
@@ -182,28 +179,19 @@ CollisionVelocityFilter::~CollisionVelocityFilter(){}
 // joystick_velocityCB reads twist command from joystick
 void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::ConstPtr &twist){
   pthread_mutex_lock(&m_mutex);
-
   robot_twist_linear_ = twist->linear;
   robot_twist_angular_ = twist->angular;
-
-
 
   pthread_mutex_unlock(&m_mutex);
   // generate the potential field grid map
   generatePotentialField();
   
- 
   if(collisionPreCalculate() == false) {
     //printf("no move\n");
     stopMovement();
   }
   else{ 
     performControllerStep();
-
-    // check for relevant obstacles
-    //obstacleHandler();
-    // stop if we are about to run in an obstacle
-    //performControllerStep();
   }
 }
 
@@ -224,6 +212,7 @@ void CollisionVelocityFilter::generatePotentialField(){
 
 //return true when collision can be avoided
 bool CollisionVelocityFilter::collisionPreCalculate(){
+
   bool has_collision = true;
   bool in_range = true;
   std::vector<geometry_msgs::Point> robot_footprint;
@@ -244,9 +233,7 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
     while(has_collision && in_range){
       has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint);
       if(has_collision){
-        //ROS_INFO("need to change velocity");
         rotate_angle = rotate_angle - (M_PI / 180.0f);
-        // ROS_INFO("rotate_angle is now %f",rotate_angle);
         if(rotate_angle < -M_PI/2.4) in_range = false; 
         else modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
       }
@@ -274,8 +261,6 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
 
   //only rotation exists
   else{
-    //always allow small rotation
-    if(fabs(robot_twist_angular_.z) < use_circumscribed_threshold_) return true;
     //check collision after rotation
     if(potential_field_.collisionByRotation(robot_twist_angular_.z,robot_footprint)){ 
     return false; 
@@ -396,14 +381,13 @@ void CollisionVelocityFilter::performControllerStepNew() {
 
 void CollisionVelocityFilter::performControllerStep() {
 
- // if(max_warn_value_ == potential_field_.max_potential_value_) ROS_WARN("find footprint inside the obstacle!");
-//  if(max_warn_value_ == potential_field_.forbidden_value_) ROS_WARN("already inside the forbidden area!");
-//  else  ROS_INFO("max_value is now %d",max_warn_value_);
+  if(max_warn_value_ == potential_field_.max_potential_value_) ROS_WARN("find footprint inside the obstacle!");
+  //else  ROS_INFO("max_value is now %d",max_warn_value_);
 
   geometry_msgs::Twist cmd_vel;
   cmd_vel.angular = robot_twist_angular_; 
-  cmd_vel.linear.x = robot_twist_linear_.x * 0.2 + (robot_twist_linear_.x * ((241.00f - max_warn_value_)/241.00f)); 
-  cmd_vel.linear.y = robot_twist_linear_.y * 0.2 + (robot_twist_linear_.y * ((241.00f - max_warn_value_)/241.00f));
+  cmd_vel.linear.x = robot_twist_linear_.x * 0.2 + (robot_twist_linear_.x * ((potential_field_.forbidden_value_ - max_warn_value_)/(double)potential_field_.forbidden_value_)); 
+  cmd_vel.linear.y = robot_twist_linear_.y * 0.2 + (robot_twist_linear_.y * ((potential_field_.forbidden_value_ - max_warn_value_)/(double)potential_field_.forbidden_value_));
   cmd_vel.linear.z = 0;
   if(fabs(cmd_vel.linear.x)>fabs(robot_twist_linear_.x))  cmd_vel.linear.x = robot_twist_linear_.x;
   if(fabs(cmd_vel.linear.y)>fabs(robot_twist_linear_.y))  cmd_vel.linear.y = robot_twist_linear_.y;
@@ -415,7 +399,7 @@ void CollisionVelocityFilter::performControllerStep() {
 
 void CollisionVelocityFilter::stopMovement() {
   geometry_msgs::Twist stop_twist;
-  printf("cannot move!");
+  ROS_INFO("cannot move anymore");
   stop_twist.linear.x = 0.0f; stop_twist.linear.y = 0.0f; stop_twist.linear.z = 0.0f;
   stop_twist.angular.x = 0.0f; stop_twist.angular.y = 0.0f; stop_twist.linear.z = 0.0f;
   topic_pub_command_.publish(stop_twist);

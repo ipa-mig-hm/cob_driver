@@ -37,23 +37,30 @@ class FootPrintLine
     FootPrintLine(); 
     // destructor
     ~FootPrintLine();
-     // the slope of the line
+
+    // the slope and the offset of the line
+    // Y = slope * X + offset
     double slope_;
-    // the offset of the line
-    double offset_;  
-    // start and end coordinate of the line
+    double offset_;
+  
+    // start and end coordinates of the line
     double x_start_;
     double x_end_;
     double y_start_;
     double y_end_;
+   
+    // cell indexes of the line in pf-costmap
     int index_x_start_;
     int index_y_start_;
     int index_x_end_;
     int index_y_end_;
     std::vector<int> index_x_;
     std::vector<int> index_y_;
+
+    // check if the slope exists or not 
     bool has_slope_;
-    // set if this footprint line is within the robot moving direction 
+
+    // set if this footprint line is related to robot moving direction 
     bool related_;
 
     /* 0 -- north
@@ -67,85 +74,110 @@ class FootPrintLine
     //bool related_direction_[8];    
 };
 
+
 ///
-/// @class PotentialFieldGridMap
+/// @class PotentialFieldCostMap
 /// @a 2D grid map that provides the infomation of the potential field of the obstacle.  It takes the original 
 /// the data from costmap_2d  
 ///
-class PotentialFieldGridMap
+class PotentialFieldCostMap
 {  
   public:
  
-
     ///
     /// @brief  Constructor
     ///
-    PotentialFieldGridMap();
-
+    PotentialFieldCostMap();
     
     ///
     /// @brief  Destructor
     ///
-    ~PotentialFieldGridMap();
+    ~PotentialFieldCostMap();
 
+    ///
+    /// @brief initialize the parameters of the potential field costmap
+    /// 
+    void initial(); 
+
+
+
+    /***core functions***/
+
+    ///
     /// @brief generates potential field for the costmap cell linearly
+    ///
     void cellPFLinearGeneration();
 
-
     ///
-    /// @brief  reads obstacles from costmap and coverts it to grid obstacles
-    ///         then store the map information in grid_map_
-    /// @param  obstacles - 2D occupancy grid in rolling window mode!
-    ///
-    void getGridMap(const nav_msgs::GridCells& last_costmap_received);
-
-
-    ///
-    /// @brief  reads obstacles from costmap and store the map information in cost_map_
-    /// @param  obstacles - 2D occupancy grid in rolling window mode!
-    ///
-    void getCostMap(const nav_msgs::GridCells& last_costmap_received);
-  
-    /// @brief initialize the gridmap
-    void initGridMap();
-
-    /// @brief initialize the costmap
-    void initCostMap();
-    
-    /// @brief generate the msg for potential_field_forbidden_
-    void getPotentialForbidden();  
-
-    /// @brief generate the msg for potential_field_warn_ 
-    void getPotentialWarn();
-
-    ///
-    /// @brief  reads the robot footprint and calculate the related cells to the footprint
-    /// @param  footprint - robot footprint 
-    ///
-    void getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint);
-   
-    ///
-    /// @brief find the closet line on the footprint, set the line number
-    ///        and the start angle and end angle of the closest line
-    void findClosestLine();
-
-    ///
-    /// @brief guess if collision will happen in next command round
+    /// @brief check if collision will happen when translates
     /// @param cmd_vel- raw velocity command    
     /// @param footprint - robot footprint          
     /// @return true if collision will happen
     ///        
     bool collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
 
-    bool collisionByRotation(double angular,const std::vector<geometry_msgs::Point>& footprint);
+    ///
+    /// @brief check if collision will happen when rotates
+    /// @param angular - raw angular-velocity command
+    /// @param footprint - robot footprint
+    /// @return true if collision will happen
+    /// 
+    bool collisionByRotation(double& angular,const std::vector<geometry_msgs::Point>& footprint);
 
-   
+    ///
+    /// @brief  reads the robot footprint and calculate the related cells of the footprint
+    /// @param  footprint - robot footprint 
+    ///
+    void getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint);
+
     ///
     /// @brief find the biggest potential value in related footpirnt line 
     /// @param cmd_vel - raw velocity command
-    /// @return - then max cell value in related footprint line
+    /// @return - the max cell value in related footprint line/lines
     ///       
     int findWarnValue(const geometry_msgs::Vector3& cmd_vel);
+
+     
+    ///
+    /// @brief  reads obstacles from costmap and store the map information in cost_map_
+    /// @param  obstacles - 2D occupancy grid in rolling window mode
+    ///
+    void getCostMap(const nav_msgs::GridCells& last_costmap_received);
+  
+
+    /***helper functions***/
+    ///
+    /// @brief initialize the costmap
+    ///
+    void initCostMap();
+    
+    ///
+    /// @brief generate the msg for potential_field_forbidden_
+    ///
+    void getPotentialForbidden();  
+
+    ///
+    /// @brief generate the msg for potential_field_warn_
+    /// 
+    void getPotentialWarn();
+ 
+    ///
+    /// @brief find the closet line on the footprint, set the line number
+    ///        and the start angle and end angle of the closest line
+    ///
+    void findClosestLine();
+  
+    ///
+    /// @brief initialize the gridmap
+    ///
+    void initGridMap();
+
+    ///
+    /// @brief  reads obstacles from costmap and coverts it to grid obstacles
+    ///         then store the map information in grid_map_
+    /// @param  obstacles - 2D occupancy grid in rolling window mode
+    ///
+    void getGridMap(const nav_msgs::GridCells& last_costmap_received);
 
     
     nav_msgs::GridCells potential_field_forbidden_;
@@ -158,7 +190,7 @@ class PotentialFieldGridMap
     int max_potential_value_;
     int forbidden_value_;
     
-    void initial(); 
+
   private: 
 
     ///
@@ -193,12 +225,12 @@ class PotentialFieldGridMap
 
 
     ///
-    /// @brief check if the expected footprint is overlapped with the forbidden area
-    /// @return true if collision exists (overlapped)
+    /// @brief check if the expected footprint is overlapped with obstacles
+    /// @return true if collision exists 
     ///    
     bool checkCollision();
 
-    bool checkCollisionRotate();
+
     ///
     /// @brief  delete the grid map
     ///
@@ -241,6 +273,6 @@ class PotentialFieldGridMap
     double closest_line_orth_angle_;	
     int closest_line_num_;
     std::vector<FootPrintLine> footprint_line_; 
-}; //PotentialFieldGridMap
+}; //PotentialFieldCostMap
 #endif
 

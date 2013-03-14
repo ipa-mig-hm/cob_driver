@@ -83,7 +83,7 @@
 #include "velocity_limited_marker.h"
 
 // potential field grid map
-#include "cob_collision_grid_map.h"
+#include "cob_collision_cost_map.h"
 
 
 ///
@@ -237,17 +237,20 @@ class CollisionVelocityFilter
     double influence_radius_, stop_threshold_, obstacle_damping_dist_, use_circumscribed_threshold_;
     double closest_obstacle_dist_, closest_obstacle_angle_;
 
-    // variables for slow down behaviour
+    //variables for slow down behaviour
     double last_time_;
     double kp_, kv_;
     double vx_last_, vy_last_, vtheta_last_;
     double virt_mass_;
 
-    // BUT velocity limited marker
+    //BUT velocity limited marker
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
-    PotentialFieldGridMap potential_field_;
+
+    
+    PotentialFieldCostMap potential_field_;
+    //biggest potential value in related footpirnt line 
     int max_warn_value_;
-    // for potential field grid map
+
 
 }; //CollisionVelocityFilter
 
