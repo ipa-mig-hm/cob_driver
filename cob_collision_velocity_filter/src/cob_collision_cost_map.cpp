@@ -106,11 +106,11 @@ bool PotentialFieldCostMap::collisionByRotation(double& angular,const std::vecto
 
 
 //check if collision will happen when translates, the behavior is influenced by stop_threshold
-bool PotentialFieldCostMap::collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint){
+bool PotentialFieldCostMap::collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint,double predicted_distance){
   //simulate a new footprint 
   double vel_angle = atan2(cmd_vel.y, cmd_vel.x);
-  double x_offset = cos(vel_angle) * stop_threshold_ ; 
-  double y_offset = sin(vel_angle) * stop_threshold_ ;
+  double x_offset = cos(vel_angle) * predicted_distance; 
+  double y_offset = sin(vel_angle) * predicted_distance;
   std::vector<geometry_msgs::Point> new_footprint;
   new_footprint.clear();
   geometry_msgs::Point pt;
@@ -398,32 +398,138 @@ int PotentialFieldCostMap::getCellIndex(int cell_x,int cell_y){
 }
 
 
-//TODO need to rewrite  for different footprints 
+
 void PotentialFieldCostMap::setRelatedLine(const geometry_msgs::Vector3& cmd_vel){
-  /*double start_angle = 0;
+ 
+  double start_angle = 0;
   double end_angle = 0;
   for(unsigned int i=0; i<footprint_line_.size(); i++){
     start_angle = atan2(footprint_line_[i].y_start_,footprint_line_[i].x_start_);
     end_angle = atan2(footprint_line_[i].y_end_,footprint_line_[i].x_end_); 
-    if(0<start_angle<M_PI && 0<end_angle<M_PI && (footprint_line_[i].y_start_==footprint_line_[i].y_end_)) footprint_line_[i].related_direction[0] = true;
-    else if(-M_PI<start_angle<0 && -M_PI<end_angle<-0 && (footprint_line_[i].y_start_==footprint_line_[i].y_end_)) footprint_line_[i].related_direction[4] = true;
-    else if((M_PI/2<start_angle<M_PI||-M_PI<start_angle<-M_PI/2) && (M_PI/2<end_angle<M_PI||-M_PI<end_angle<M-M_PI/2) && (footprint_line_[i].x_start_==footprint_line_[i].x_end_)) footprint_line_[i].related_direction[6] = true;
-    else if(-M_PI/2<start_angle<M_PI/2 && -M_PI/2<end_angle<M_PI/2 && (footprint_line_[i].x_start_==footprint_line_[i].x_end_)) footprint_line_[i].related_direction[2] = true;
-    else{
-      if(0<=start_angle<=M_PI/2 && 0<=start_angle<=M_PI/2)
+ 
+    if(0<start_angle&&start_angle<M_PI/2&&M_PI/2<end_angle&&end_angle<M_PI){
+      if(footprint_line_[i].y_start_ == footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 0;
+      else if (footprint_line_[i].y_start_ < footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 8;
+      else footprint_line_[i].related_type_ = 9;
     }
-  }*/
 
-  if(cmd_vel.x==0&&cmd_vel.y>0) footprint_line_[3].related_ = true;
-  else if(cmd_vel.x==0&&cmd_vel.y<0) footprint_line_[1].related_ = true;
-  else if(cmd_vel.x>0&&cmd_vel.y==0) footprint_line_[0].related_ = true;
-  else if(cmd_vel.x<0&&cmd_vel.y==0) footprint_line_[2].related_ = true;
-  else if(cmd_vel.x<0&&cmd_vel.y<0) { footprint_line_[1].related_ = true; footprint_line_[2].related_ = true;}
-  else if(cmd_vel.x<0&&cmd_vel.y>0) { footprint_line_[2].related_ = true; footprint_line_[3].related_ = true;}
-  else if(cmd_vel.x>0&&cmd_vel.y<0) { footprint_line_[0].related_ = true; footprint_line_[1].related_ = true;}
-  else if(cmd_vel.x>0&&cmd_vel.y>0) { footprint_line_[3].related_ = true; footprint_line_[0].related_ = true;}
+    else if(0<end_angle&&end_angle<M_PI/2&&M_PI/2<start_angle&&start_angle<M_PI){
+      if(footprint_line_[i].y_start_ == footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 0;
+      else if (footprint_line_[i].y_start_ < footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 9;
+      else footprint_line_[i].related_type_ = 8;
+    }
+
+    else if(0<start_angle&&start_angle<M_PI/2&&(-M_PI/2)<end_angle&&end_angle<0){
+      if(footprint_line_[i].x_start_ == footprint_line_[i].x_end_) footprint_line_[i].related_type_ = 1;
+      else if (footprint_line_[i].x_start_ < footprint_line_[i].x_end_) footprint_line_[i].related_type_ = 11;
+      else footprint_line_[i].related_type_ = 10;
+    }
+
+    else if(0<end_angle&&end_angle<M_PI/2&&(-M_PI/2)<start_angle&&start_angle<0){
+      if(footprint_line_[i].x_start_ == footprint_line_[i].x_end_) footprint_line_[i].related_type_ = 1;
+      else if (footprint_line_[i].x_start_ < footprint_line_[i].x_end_) footprint_line_[i].related_type_ = 10;
+      else footprint_line_[i].related_type_ = 11;
+    }
+
+    else if((-M_PI)<start_angle&&start_angle<(-M_PI/2)&&(-M_PI/2)<end_angle&&end_angle<0){
+      if(footprint_line_[i].y_start_ == footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 2;
+      else if (footprint_line_[i].y_start_ < footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 13;
+      else footprint_line_[i].related_type_ = 12;
+    }
+  
+    else if((-M_PI)<end_angle&&end_angle<(-M_PI/2)&&(-M_PI/2)<start_angle&&start_angle<0){
+      if(footprint_line_[i].y_start_ == footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 2;
+      else if (footprint_line_[i].y_start_ < footprint_line_[i].y_end_) footprint_line_[i].related_type_ = 12;
+      else footprint_line_[i].related_type_ = 13;
+    }
+
+    else if((M_PI/2)<start_angle&&start_angle<(M_PI)&&(-M_PI)<end_angle&&end_angle<(-M_PI/2)){
+      if(footprint_line_[i].x_start_ == footprint_line_[i].x_end_) footprint_line_[i].related_type_ = 3;
+      else if (footprint_line_[i].x_start_ < footprint_line_[i].x_end_) footprint_line_[i].related_type_ =15 ;
+      else footprint_line_[i].related_type_ = 14;
+    }
+
+    else if((M_PI/2)<end_angle&&end_angle<(M_PI)&&(-M_PI)<start_angle&&start_angle<(-M_PI/2)){
+      if(footprint_line_[i].x_start_ == footprint_line_[i].x_end_) footprint_line_[i].related_type_ = 3;
+      else if (footprint_line_[i].x_start_ < footprint_line_[i].x_end_) footprint_line_[i].related_type_ =14 ;
+      else footprint_line_[i].related_type_ = 15;
+    }
+
+    else if(0<=end_angle&&end_angle<=M_PI/2&&0<=start_angle&&start_angle<=M_PI/2)             footprint_line_[i].related_type_ = 4;
+    else if(M_PI/2<=end_angle&&end_angle<=M_PI&&M_PI/2<=start_angle&&start_angle<=M_PI)       footprint_line_[i].related_type_ = 7;
+    else if((-M_PI/2)<=end_angle&&end_angle<=0&&(-M_PI/2)<=start_angle&&start_angle<=0)       footprint_line_[i].related_type_ = 5;
+    else if((-M_PI)<=end_angle&&end_angle<=(-M_PI/2)&&(-M_PI)<=start_angle&&start_angle<=(-M_PI/2)) footprint_line_[i].related_type_ = 6;
+    
+   else {
+     footprint_line_[i].related_type_ = -1;
+     ROS_WARN("unknown type of footprint line");
+   }
+
+  }
+
+  /*velocity type
+  0 -- north 
+  1 -- east
+  2 -- south
+  3 -- west
+  4 -- north east
+  5 -- south east
+  6 -- south west
+  7 -- north west*/
+   
+ 
+  int vel_type=-1;
+  if(cmd_vel.x==0&&cmd_vel.y>0)      vel_type = 0;
+  else if(cmd_vel.x==0&&cmd_vel.y<0) vel_type = 2;
+  else if(cmd_vel.x>0&&cmd_vel.y==0) vel_type = 1;
+  else if(cmd_vel.x<0&&cmd_vel.y==0) vel_type = 3;
+  else if(cmd_vel.x<0&&cmd_vel.y<0)  vel_type = 6;
+  else if(cmd_vel.x<0&&cmd_vel.y>0)  vel_type = 7;
+  else if(cmd_vel.x>0&&cmd_vel.y<0)  vel_type = 5;
+  else if(cmd_vel.x>0&&cmd_vel.y>0)  vel_type = 4;
+  
+
+  for(unsigned int i=0;i<footprint_line_.size();i++){
+    switch(vel_type) {
+      case 0:{ 
+        if(footprint_line_[i].related_type_==0||footprint_line_[i].related_type_==4||footprint_line_[i].related_type_==7||footprint_line_[i].related_type_==8||footprint_line_[i].related_type_==9||footprint_line_[i].related_type_==11||footprint_line_[i].related_type_==15) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 1:{ 
+        if(footprint_line_[i].related_type_==1||footprint_line_[i].related_type_==4||footprint_line_[i].related_type_==5||footprint_line_[i].related_type_==10||footprint_line_[i].related_type_==11||footprint_line_[i].related_type_==8||footprint_line_[i].related_type_==13) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 2:{ 
+        if(footprint_line_[i].related_type_==2||footprint_line_[i].related_type_==5||footprint_line_[i].related_type_==6||footprint_line_[i].related_type_==12||footprint_line_[i].related_type_==13||footprint_line_[i].related_type_==10||footprint_line_[i].related_type_==14) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 3:{ 
+        if(footprint_line_[i].related_type_==3||footprint_line_[i].related_type_==6||footprint_line_[i].related_type_==7||footprint_line_[i].related_type_==14||footprint_line_[i].related_type_==15||footprint_line_[i].related_type_==12||footprint_line_[i].related_type_==9) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 4:{ 
+        if(footprint_line_[i].related_type_==0||footprint_line_[i].related_type_==1||footprint_line_[i].related_type_==4||footprint_line_[i].related_type_==8||footprint_line_[i].related_type_==9||footprint_line_[i].related_type_==10||footprint_line_[i].related_type_==11) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 5:{ 
+        if(footprint_line_[i].related_type_==1||footprint_line_[i].related_type_==2||footprint_line_[i].related_type_==5||footprint_line_[i].related_type_==10||footprint_line_[i].related_type_==11||footprint_line_[i].related_type_==12||footprint_line_[i].related_type_==13) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 6:{ 
+        if(footprint_line_[i].related_type_==2||footprint_line_[i].related_type_==3||footprint_line_[i].related_type_==6||footprint_line_[i].related_type_==12||footprint_line_[i].related_type_==13||footprint_line_[i].related_type_==14||footprint_line_[i].related_type_==15) footprint_line_[i].related_ = true;
+        break;
+      }
+      case 7:{ 
+        if(footprint_line_[i].related_type_==0||footprint_line_[i].related_type_==3||footprint_line_[i].related_type_==7||footprint_line_[i].related_type_==8||footprint_line_[i].related_type_==9||footprint_line_[i].related_type_==14||footprint_line_[i].related_type_==15) footprint_line_[i].related_ = true;
+        break;
+      }
+      default:{
+        ROS_INFO("footprint line do not has a related type");
+        break;
+      }
+    }
+  }
 }
-
 
 void PotentialFieldCostMap::findClosestLine(){
   //set the first line as the defalult cloesest line

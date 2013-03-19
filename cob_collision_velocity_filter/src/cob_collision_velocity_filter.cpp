@@ -102,7 +102,7 @@ CollisionVelocityFilter::CollisionVelocityFilter()
 
   // parameters for obstacle avoidence and velocity adjustment
   if(!nh_.hasParam("stop_threshold")) ROS_WARN("Used default parameter for stop_threshold [0.1 m]");
-  nh_.param("stop_threshold", stop_threshold_, 0.15);
+  nh_.param("stop_threshold", stop_threshold_, 0.10);
 
   if(!nh_.hasParam("obstacle_damping_dist")) ROS_WARN("Used default parameter for obstacle_damping_dist [5.0 m]");
   nh_.param("obstacle_damping_dist", obstacle_damping_dist_, 5.0);
@@ -231,7 +231,7 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
     robot_twist_angular_.z = 0;
     //check the footprint in 0 to -75 degree
     while(has_collision && in_range){
-      has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint);
+      has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint,stop_threshold_);
       if(has_collision){
         rotate_angle = rotate_angle - (M_PI / 180.0f);
         if(rotate_angle < -M_PI/2.4) in_range = false; 
@@ -246,7 +246,7 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
       if(rotate_angle > M_PI/2.4) in_range = false;
       else{
         modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
-        has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint);
+        has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint,stop_threshold_);
       }
     }
    
@@ -269,8 +269,6 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
   }     
   
 }
-
-
 
 
 void CollisionVelocityFilter::modifyCommand(double rotate_angle, geometry_msgs::Vector3& robot_twist_linear,double vel_angle,double vel_length){
@@ -559,14 +557,6 @@ double CollisionVelocityFilter::sign(double x) {
   else return -1.0f;
 }
 
-bool CollisionVelocityFilter::obstacleValid(double x_obstacle, double y_obstacle) {
-  if(x_obstacle<footprint_front_ && x_obstacle>footprint_rear_ && y_obstacle>footprint_right_ && y_obstacle<footprint_left_) {
-    ROS_WARN("Found an obstacle inside robot_footprint: Skip!");
-    return false;
-  }
-
-  return true;
-}
 
 
 //#######################

@@ -63,15 +63,27 @@ class FootPrintLine
     // set if this footprint line is related to robot moving direction 
     bool related_;
 
-    /* 0 -- north
-       1 -- north east
-       2 -- east
-       3 -- south east 
-       4 -- south 
-       5 -- south west
-       6 -- west
-       7 -- north west  */
-    //bool related_direction_[8];    
+   /* different types of lines is related to different directions 
+       0 -- north
+       1 -- east 
+       2 -- south
+       3 -- west 
+       4 -- north and east
+       5 -- south and east 
+       6 -- south and west 
+       7 -- north and west
+       8 -- west,north and east  (higher on left  side)
+       9 -- west,north and east  (higher on right side)
+      10 -- north,east and south (bigger on left  side)
+      11 -- north,east and south (bigger on right side)
+      12 -- east,south and west  (higher on left  side)
+      13 -- east,south and west  (higher on right side)
+      14 -- south,west and north (bigger on left  side)
+      15 -- south,west and north (bigger on right side)
+      16 -- unknow */
+    int related_type_;
+
+
 };
 
 
@@ -114,7 +126,7 @@ class PotentialFieldCostMap
     /// @param footprint - robot footprint          
     /// @return true if collision will happen
     ///        
-    bool collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint); 
+    bool collisionByTranslation(const geometry_msgs::Vector3& cmd_vel, const std::vector<geometry_msgs::Point>& footprint,double predicted_distance); 
 
     ///
     /// @brief check if collision will happen when rotates

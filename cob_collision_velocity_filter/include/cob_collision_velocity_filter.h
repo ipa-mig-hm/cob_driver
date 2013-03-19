@@ -205,13 +205,6 @@ class CollisionVelocityFilter
     ///
     double getDistance2d(geometry_msgs::Point a, geometry_msgs::Point b);
 
-    ///
-    /// @brief  checks if obstacle lies already within footprint -> this is ignored due to sensor readings of the hull etc
-    /// @param  x_obstacle - x coordinate of obstacle in occupancy grid local costmap
-    /// @param  y_obstacle - y coordinate of obstacle in occupancy grid local costmap
-    /// @return true if obstacle outside of footprint
-    ///
-    bool obstacleValid(double x_obstacle, double y_obstacle);
 
     ///
     /// @brief  stops movement of the robot
