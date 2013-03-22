@@ -72,7 +72,7 @@ bool PotentialFieldCostMap::collisionByRotation(double& angular,const std::vecto
    std::vector<geometry_msgs::Point> new_footprint;
    new_footprint.clear();  
    //check the footprint after a 4.5 and a  9 degree rotation. If collision exists in 4.5 degreee, the robot stops
-   //if collision only exists in 9 degree, then the robot rotate in a very slow speed.
+   //if collision only exists in 9 degree, then the robot can only rotate in a very slow speed.
 
 
    for(unsigned int i=0; i<footprint.size(); i++){
@@ -237,11 +237,11 @@ int PotentialFieldCostMap::findWarnValue(const geometry_msgs::Vector3& cmd_vel){
 bool PotentialFieldCostMap::checkCollision(){
   int index_x,index_y;
   for(unsigned int i=0;i<footprint_line_.size();i++){ 
-    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] == max_potential_value_) return true; 
+    if(cost_map_[getCellIndex(footprint_line_[i].index_x_start_, footprint_line_[i].index_y_start_)] >= forbidden_value_) return true; 
     for(unsigned int j=0;j<footprint_line_[i].index_x_.size();j++){
       index_x = footprint_line_[i].index_x_[j];
       index_y = footprint_line_[i].index_y_[j];
-      if(cost_map_[getCellIndex(index_x,index_y)] == max_potential_value_) return true;
+      if(cost_map_[getCellIndex(index_x,index_y)] >= forbidden_value_) return true;
       
     }          
   }
@@ -285,9 +285,9 @@ void PotentialFieldCostMap::getCostMap(const nav_msgs::GridCells& last_costmap_r
       cell_x = (last_costmap_received.cells[i].x + map_w/2) / resolution_;
       cell_y = (last_costmap_received.cells[i].y + map_h/2) / resolution_; 
       int index = getCellIndex(cell_x,cell_y);
+      // if the obstacle is inside the potential field costmap
       if (index!=-1)
       cost_map_[index] = max_potential_value_; 
-      else ROS_WARN("nagative index x:%f,y:%f,cell_x= %d",last_costmap_received.cells[i].x,last_costmap_received.cells[i].y,cell_x);
     } 
    } 
 }
@@ -337,15 +337,15 @@ void PotentialFieldCostMap::getPotentialWarn(){
 
 double PotentialFieldCostMap::getCellCoordX(int index_x){
   double cell_x;
-  if(cell_size_x_odd_) cell_x = (index_x+1)*resolution_ - cell_size_x_*resolution_/2;
-  else cell_x = (index_x+1)*resolution_ - (cell_size_x_+1)*resolution_/2;  
+  if(cell_size_x_odd_) cell_x = (index_x+1)*resolution_ - (cell_size_x_)*resolution_/2;  
+  else cell_x = (index_x+1)*resolution_ - (cell_size_x_+1)*resolution_/2;
   return cell_x;
 }
 
 double PotentialFieldCostMap::getCellCoordY(int index_y){
   double cell_y;
-  if(cell_size_y_odd_) cell_y = (index_y+1)*resolution_ - cell_size_y_*resolution_/2;
-  else cell_y = (index_y+1)*resolution_ - (cell_size_y_+1)*resolution_/2;  
+  if(cell_size_y_odd_) cell_y = (index_y+1)*resolution_ - (cell_size_y_)*resolution_/2;  
+  else cell_y = (index_y+1)*resolution_ - (cell_size_y_+1)*resolution_/2;
   return cell_y;
 }
 
@@ -396,6 +396,8 @@ int PotentialFieldCostMap::getCellIndex(int cell_x,int cell_y){
     return -1;
   } 
 }
+
+
 
 
 

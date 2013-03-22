@@ -66,9 +66,8 @@ CollisionVelocityFilter::CollisionVelocityFilter()
 
   ros::NodeHandle local_costmap_nh_(costmap_parameter_source); 	
 
-  // implementation of topics to publish (command for base and list of relevant obstacles)
+  // implementation of topics to publish (command for base)
   topic_pub_command_ = nh_.advertise<geometry_msgs::Twist>("command", 1);
-  topic_pub_relevant_obstacles_ = nh_.advertise<nav_msgs::GridCells>("relevant_obstacles", 1);
   // implementation of topic to publish potential field of the local costmap
   topic_pub_potential_field_forbidden_ = nh_.advertise<nav_msgs::GridCells>("potential_field_forbidden",1);
   topic_pub_potential_field_warn_ = nh_.advertise<nav_msgs::GridCells>("potential_field_warn",1);  
@@ -96,39 +95,23 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   local_costmap_nh_.param(costmap_parameter_source+"/robot_base_frame", robot_frame_, std::string("/base_link"));
 
   if(!nh_.hasParam("influence_radius")) ROS_WARN("Used default parameter for influence_radius [1.5 m]");
-  nh_.param("influence_radius", influence_radius_, 1.5);
-  closest_obstacle_dist_ = influence_radius_;
-  closest_obstacle_angle_ = 0.0;
+  nh_.param("influence_radius", influence_radius_, 1.0);
 
   // parameters for obstacle avoidence and velocity adjustment
   if(!nh_.hasParam("stop_threshold")) ROS_WARN("Used default parameter for stop_threshold [0.1 m]");
   nh_.param("stop_threshold", stop_threshold_, 0.10);
+  if(stop_threshold_ > influence_radius_) ROS_WARN("Stop threshold should be smaller than influence radius");
 
-  if(!nh_.hasParam("obstacle_damping_dist")) ROS_WARN("Used default parameter for obstacle_damping_dist [5.0 m]");
-  nh_.param("obstacle_damping_dist", obstacle_damping_dist_, 5.0);
-  if(obstacle_damping_dist_ <= stop_threshold_) {
-    obstacle_damping_dist_ = stop_threshold_ + 0.01; // set to stop_threshold_+0.01 to avoid divide by zero error
-    ROS_WARN("obstacle_damping_dist <= stop_threshold -> robot will stop without decceleration!");
-  }
-
-  if(!nh_.hasParam("pot_ctrl_vmax")) ROS_WARN("Used default parameter for pot_ctrl_vmax [0.6]");
-  nh_.param("pot_ctrl_vmax", v_max_, 0.6);
-
-  if(!nh_.hasParam("pot_ctrl_vtheta_max")) ROS_WARN("Used default parameter for pot_ctrl_vtheta_max [0.8]");
-  nh_.param("pot_ctrl_vtheta_max", vtheta_max_, 0.8);
-
-  if(!nh_.hasParam("pot_ctrl_kv")) ROS_WARN("Used default parameter for pot_ctrl_kv [1.0]");
-  nh_.param("pot_ctrl_kv", kv_, 1.0);
-
-  if(!nh_.hasParam("pot_ctrl_kp")) ROS_WARN("Used default parameter for pot_ctrl_kp [2.0]");
-  nh_.param("pot_ctrl_kp", kp_, 2.0);
-
-  if(!nh_.hasParam("pot_ctrl_virt_mass")) ROS_WARN("Used default parameter for pot_ctrl_virt_mass [0.8]");
-  nh_.param("pot_ctrl_virt_mass", virt_mass_, 0.8);
 
   //parameters for Class PotentialFieldCostMap  
   if(!nh_.hasParam("costmap_resolution")) ROS_WARN("Used default parameter for resolution [0.07]");
   nh_.param("costmap_resolution",potential_field_.resolution_,0.07); 
+
+  //potential_field_.resolution_ = 0.04;
+
+
+  if(potential_field_.resolution_ > stop_threshold_) 
+  ROS_WARN("Cannot create potential field, resolution is bigger than stop threshold");
   
   if(!nh_.hasParam("map_height")) ROS_WARN("Used default parameter for map_height [5.0]");
   nh_.param("map_height",potential_field_.map_height_,5.0);
@@ -137,8 +120,13 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   nh_.param("map_width",potential_field_.map_width_,5.0);
   
   if(!nh_.hasParam("max_potential_value")) ROS_WARN("Used default parameter for max_potential_value [250]");
-  nh_.param("map_potential_value",potential_field_.max_potential_value_,250);
+  nh_.param("max_potential_value",potential_field_.max_potential_value_,250);
+
+  if(!nh_.hasParam("predicted_distance")) ROS_WARN("Used default parameter fot predicted distance [0.1]");
+  nh_.param("predicted_distance",predicted_distance_,0.1);
+
  
+  max_warn_value_ = 0;
   potential_field_.influence_radius_ = influence_radius_ ;
   potential_field_.stop_threshold_ = stop_threshold_;
   potential_field_.initial();
@@ -146,28 +134,7 @@ CollisionVelocityFilter::CollisionVelocityFilter()
  
   //load the robot footprint from the parameter server if its available in the local costmap namespace
   robot_footprint_ = loadRobotFootprint(local_costmap_nh_);
-  if(robot_footprint_.size() > 4) 
-    ROS_WARN("You have set more than 4 points as robot_footprint, cob_collision_velocity_filter can deal only with rectangular footprints so far!");
 
-  // try to geht the max_acceleration values from the parameter server
-  if(!nh_.hasParam("max_acceleration")) ROS_WARN("Used default parameter for max_acceleration [0.5, 0.5, 0.7]");
-  XmlRpc::XmlRpcValue max_acc;
-  if(nh_.getParam("max_acceleration", max_acc)) {
-    ROS_ASSERT(max_acc.getType() == XmlRpc::XmlRpcValue::TypeArray);
-    ax_max_ = (double)max_acc[0];
-    ay_max_ = (double)max_acc[1];
-    atheta_max_ = (double)max_acc[2];
-  } else {
-    ax_max_ = 0.5;
-    ay_max_ = 0.5;
-    atheta_max_ = 0.7;
-  }
-
-  max_warn_value_ = 0;
-  last_time_ = ros::Time::now().toSec();
-  vx_last_ = 0.0;
-  vy_last_ = 0.0;
-  vtheta_last_ = 0.0;
   // dynamic reconfigure
   dynCB_ = boost::bind(&CollisionVelocityFilter::dynamicReconfigureCB, this, _1, _2);
   dyn_server_.setCallback(dynCB_);
@@ -186,7 +153,7 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
   // generate the potential field grid map
   generatePotentialField();
   
-  if(collisionPreCalculate() == false) {
+  if(collisionPreCalculate() == false){
     //printf("no move\n");
     stopMovement();
   }
@@ -196,6 +163,8 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
 }
 
 
+// initializes and generates the potential field cost map and publishes the forbidden area and warn area 
+// of the potential field 
 void CollisionVelocityFilter::generatePotentialField(){
   potential_field_.initCostMap();
   pthread_mutex_lock(&m_mutex);
@@ -210,7 +179,7 @@ void CollisionVelocityFilter::generatePotentialField(){
 
 
 
-//return true when collision can be avoided
+//return false if collision cannot be avoided 
 bool CollisionVelocityFilter::collisionPreCalculate(){
 
   bool has_collision = true;
@@ -226,12 +195,12 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
 
   //no command
   if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0 && robot_twist_angular_.z ==0) return true;
-  //stop rotation when translation exists
+  //disable the rotation when translation exists
   if(robot_twist_linear_.x!=0 || robot_twist_linear_.y!=0){
     robot_twist_angular_.z = 0;
     //check the footprint in 0 to -75 degree
     while(has_collision && in_range){
-      has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint,stop_threshold_);
+      has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint,predicted_distance_);
       if(has_collision){
         rotate_angle = rotate_angle - (M_PI / 180.0f);
         if(rotate_angle < -M_PI/2.4) in_range = false; 
@@ -246,7 +215,7 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
       if(rotate_angle > M_PI/2.4) in_range = false;
       else{
         modifyCommand(rotate_angle,robot_twist_linear,vel_angle,vel_length);
-        has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint,stop_threshold_);
+        has_collision = potential_field_.collisionByTranslation(robot_twist_linear,robot_footprint,predicted_distance_);
       }
     }
    
@@ -342,15 +311,10 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
   pthread_mutex_lock(&m_mutex);
 
   stop_threshold_ = config.stop_threshold;
-  obstacle_damping_dist_ = config.obstacle_damping_dist;
-  if(obstacle_damping_dist_ <= stop_threshold_) {
-    obstacle_damping_dist_ = stop_threshold_ + 0.01; // set to stop_threshold_+0.01 to avoid divide by zero error
-    ROS_WARN("obstacle_damping_dist <= stop_threshold -> robot will stop without decceleration!");
-  }
 
-  if(obstacle_damping_dist_ > config.influence_radius || stop_threshold_ > config.influence_radius)
+  if(stop_threshold_ > config.influence_radius)
   {
-    ROS_WARN("Not changing influence_radius since obstacle_damping_dist and/or stop_threshold is bigger!");
+    ROS_WARN("Not changing influence_radius  since stop_threshold is bigger!");
   } else {
     influence_radius_ = config.influence_radius;
   }
@@ -360,21 +324,6 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
   pthread_mutex_unlock(&m_mutex);
 }
 
-
-void CollisionVelocityFilter::performControllerStepNew() {
- 
-  double vx_max,vy_max;
-  geometry_msgs::Twist cmd_vel,cmd_vel_in;
-  cmd_vel_in.linear = robot_twist_linear_;
-  cmd_vel_in.angular = robot_twist_angular_;
-  
-  double vel_angle = atan2(cmd_vel.linear.y,cmd_vel.linear.x);
-  vx_max = v_max_ * fabs(cos(vel_angle));
-  if (vx_max < fabs(cmd_vel.linear.x)) cmd_vel.linear.x = sign(cmd_vel.linear.x) * vx_max;
-  vy_max = v_max_ * fabs(sin(vel_angle));
-  if (vy_max < fabs(cmd_vel.linear.y)) cmd_vel.linear.y = sign(cmd_vel.linear.y) * vy_max;
-    
-}
 
 
 void CollisionVelocityFilter::performControllerStep() {

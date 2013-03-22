@@ -142,7 +142,6 @@ class CollisionVelocityFilter
     
     /// declaration of publisher 
     ros::Publisher topic_pub_command_;
-    ros::Publisher topic_pub_relevant_obstacles_;
     ros::Publisher topic_pub_potential_field_forbidden_;
     ros::Publisher topic_pub_potential_field_warn_;    
 
@@ -175,7 +174,7 @@ class CollisionVelocityFilter
     void obstacleHandler();
 
     /// 
-    /// @brief generate the potential filed grid map and publishes the 
+    /// @brief initializes and generates the potential filed cost map and publishes the 
     ///        forbidden area and warn area of the potential field
     void generatePotentialField();
 
@@ -218,32 +217,25 @@ class CollisionVelocityFilter
 
     //velocity
     geometry_msgs::Vector3 robot_twist_linear_, robot_twist_angular_;
-    double v_max_, vtheta_max_;
-    double ax_max_, ay_max_, atheta_max_;  
 
     //obstacle avoidence
     std::vector<geometry_msgs::Point> robot_footprint_;
     double footprint_left_, footprint_right_, footprint_front_, footprint_rear_;
     double footprint_left_initial_, footprint_right_initial_, footprint_front_initial_, footprint_rear_initial_;
     bool costmap_received_;
-    nav_msgs::GridCells last_costmap_received_, relevant_obstacles_;
-    double influence_radius_, stop_threshold_, obstacle_damping_dist_, use_circumscribed_threshold_;
+    nav_msgs::GridCells last_costmap_received_;
+    double influence_radius_, stop_threshold_, use_circumscribed_threshold_;
     double closest_obstacle_dist_, closest_obstacle_angle_;
-
-    //variables for slow down behaviour
-    double last_time_;
-    double kp_, kv_;
-    double vx_last_, vy_last_, vtheta_last_;
-    double virt_mass_;
 
     //BUT velocity limited marker
     cob_collision_velocity_filter::VelocityLimitedMarker velocity_limited_marker_;
 
-    
     PotentialFieldCostMap potential_field_;
     //biggest potential value in related footpirnt line 
     int max_warn_value_;
 
+    // combined with direction of the velocity to calculate the predicted footprint
+    double predicted_distance_;
 
 }; //CollisionVelocityFilter
 
