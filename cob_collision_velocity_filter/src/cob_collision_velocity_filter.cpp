@@ -107,8 +107,6 @@ CollisionVelocityFilter::CollisionVelocityFilter()
   if(!nh_.hasParam("costmap_resolution")) ROS_WARN("Used default parameter for resolution [0.07]");
   nh_.param("costmap_resolution",potential_field_.resolution_,0.07); 
 
-  //potential_field_.resolution_ = 0.04;
-
 
   if(potential_field_.resolution_ > stop_threshold_) 
   ROS_WARN("Cannot create potential field, resolution is bigger than stop threshold");
@@ -163,8 +161,8 @@ void CollisionVelocityFilter::joystickVelocityCB(const geometry_msgs::Twist::Con
 }
 
 
-// initializes and generates the potential field cost map and publishes the forbidden area and warn area 
-// of the potential field 
+//initializes and generates the potential field cost map,the forbidden area, the warm area
+//and publishes the forbidden area and warn area
 void CollisionVelocityFilter::generatePotentialField(){
   potential_field_.initCostMap();
   pthread_mutex_lock(&m_mutex);
@@ -178,11 +176,10 @@ void CollisionVelocityFilter::generatePotentialField(){
 }
 
 
-
-//return false if collision cannot be avoided 
+//return false if collision cannot be avoided (even with velocity correction)
 bool CollisionVelocityFilter::collisionPreCalculate(){
 
-  bool has_collision = true;
+  bool has_collision = true; 
   bool in_range = true;
   std::vector<geometry_msgs::Point> robot_footprint;
   geometry_msgs::Vector3 robot_twist_linear = robot_twist_linear_;
@@ -193,7 +190,7 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
   robot_footprint = robot_footprint_; 
   pthread_mutex_unlock(&m_mutex);
 
-  //no command
+  //void command is receiced
   if(robot_twist_linear_.x==0 && robot_twist_linear_.y==0 && robot_twist_angular_.z ==0) return true;
   //disable the rotation when translation exists
   if(robot_twist_linear_.x!=0 || robot_twist_linear_.y!=0){
@@ -240,12 +237,13 @@ bool CollisionVelocityFilter::collisionPreCalculate(){
 }
 
 
+//computes the new velocity after rotation
 void CollisionVelocityFilter::modifyCommand(double rotate_angle, geometry_msgs::Vector3& robot_twist_linear,double vel_angle,double vel_length){
   double new_vel_angle = vel_angle + rotate_angle;
   robot_twist_linear.x = vel_length * cos(new_vel_angle);
-  robot_twist_linear.y = vel_length * sin(new_vel_angle);
-  //ROS_INFO("modifeid command x:%f,y:%f",robot_twist_linear.x,robot_twist_linear.y); 
+  robot_twist_linear.y = vel_length * sin(new_vel_angle); 
 }
+
 
 // obstaclesCB reads obstacles from costmap
 void CollisionVelocityFilter::obstaclesCB(const nav_msgs::GridCells::ConstPtr &obstacles){
@@ -281,20 +279,7 @@ void CollisionVelocityFilter::getFootprintServiceCB(const ros::TimerEvent&)
 
     pthread_mutex_lock(&m_mutex);
 
-    footprint_front_ = footprint_front_initial_;
-    footprint_rear_ = footprint_rear_initial_;
-    footprint_left_ = footprint_left_initial_;
-    footprint_right_ = footprint_right_initial_;
-
     robot_footprint_ = footprint;
-    //read the new footprint
-    //potential_field_.getFootPrintCells(robot_footprint_);
-    for(unsigned int i=0; i<footprint.size(); i++) {
-      if(footprint[i].x > footprint_front_) footprint_front_ = footprint[i].x;
-      if(footprint[i].x < footprint_rear_) footprint_rear_ = footprint[i].x;
-      if(footprint[i].y > footprint_left_) footprint_left_ = footprint[i].y;
-      if(footprint[i].y < footprint_right_) footprint_right_ = footprint[i].y;
-    }
 
     pthread_mutex_unlock(&m_mutex);
   
@@ -325,12 +310,12 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
 }
 
 
-
+//publishes command velocity to robot based on the value of the related footprint cells
 void CollisionVelocityFilter::performControllerStep() {
 
   if(max_warn_value_ == potential_field_.max_potential_value_) ROS_WARN("find footprint inside the obstacle!");
-  //else  ROS_INFO("max_value is now %d",max_warn_value_);
-
+  ROS_INFO("the max potential value is %d",max_warn_value_);
+  
   geometry_msgs::Twist cmd_vel;
   cmd_vel.angular = robot_twist_angular_; 
   cmd_vel.linear.x = robot_twist_linear_.x * 0.2 + (robot_twist_linear_.x * ((potential_field_.forbidden_value_ - max_warn_value_)/(double)potential_field_.forbidden_value_)); 
@@ -347,6 +332,8 @@ void CollisionVelocityFilter::performControllerStep() {
 void CollisionVelocityFilter::stopMovement() {
   geometry_msgs::Twist stop_twist;
   ROS_INFO("cannot move anymore");
+  max_warn_value_ =  potential_field_.findWarnValue(robot_twist_linear_);
+  ROS_INFO("max warn value is %d",max_warn_value_);
   stop_twist.linear.x = 0.0f; stop_twist.linear.y = 0.0f; stop_twist.linear.z = 0.0f;
   stop_twist.angular.x = 0.0f; stop_twist.angular.y = 0.0f; stop_twist.linear.z = 0.0f;
   topic_pub_command_.publish(stop_twist);
@@ -483,17 +470,6 @@ std::vector<geometry_msgs::Point> CollisionVelocityFilter::loadRobotFootprint(ro
       }
     }
   }
-
-  footprint_right_ = 0.0f; footprint_left_ = 0.0f; footprint_front_ = 0.0f; footprint_rear_ = 0.0f;
-  //extract rectangular borders for simplifying:
-  for(unsigned int i=0; i<footprint.size(); i++) {
-    if(footprint[i].x > footprint_front_) footprint_front_ = footprint[i].x;
-    if(footprint[i].x < footprint_rear_) footprint_rear_ = footprint[i].x;
-    if(footprint[i].y > footprint_left_) footprint_left_ = footprint[i].y;
-    if(footprint[i].y < footprint_right_) footprint_right_ = footprint[i].y;
-  }
-  ROS_DEBUG("Extracted rectangular footprint for cob_collision_velocity_filter: Front: %f, Rear %f, Left: %f, Right %f", footprint_front_, footprint_rear_, footprint_left_, footprint_right_);
-
   return footprint;
 }
 

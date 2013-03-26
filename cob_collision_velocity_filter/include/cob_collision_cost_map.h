@@ -83,7 +83,6 @@ class FootPrintLine
       16 -- unknow */
     int related_type_;
 
-
 };
 
 
@@ -137,7 +136,7 @@ class PotentialFieldCostMap
     bool collisionByRotation(double& angular,const std::vector<geometry_msgs::Point>& footprint);
 
     ///
-    /// @brief  reads the robot footprint and calculate the related cells of the footprint
+    /// @brief  reads the robot footprint and computes the cells occupied by the footprint in the potential field costmap
     /// @param  footprint - robot footprint 
     ///
     void getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint);
@@ -178,22 +177,10 @@ class PotentialFieldCostMap
     ///        and the start angle and end angle of the closest line
     ///
     void findClosestLine();
-  
-    ///
-    /// @brief initialize the gridmap
-    ///
-    void initGridMap();
-
-    ///
-    /// @brief  reads obstacles from costmap and coverts it to grid obstacles
-    ///         then store the map information in grid_map_
-    /// @param  obstacles - 2D occupancy grid in rolling window mode
-    ///
-    void getGridMap(const nav_msgs::GridCells& last_costmap_received);
-
-    
+        
     nav_msgs::GridCells potential_field_forbidden_;
     nav_msgs::GridCells potential_field_warn_;
+
     double resolution_; 
     double influence_radius_; 
     double stop_threshold_;
@@ -242,22 +229,10 @@ class PotentialFieldCostMap
     ///    
     bool checkCollision();
 
-
     ///
-    /// @brief  delete the grid map
-    ///
-    void deleteGridMap();
-        
-    ///
-    /// @brief  delete the grid map
+    /// @brief  delete the costmap
     ///
     void deleteCostMap();
-
-    ///
-    /// @bried return the index of grid map
-    /// @param grid_x,grid_y - coordinates of grid map
-    ///
-    int getGridIndex( int grid_x,  int grid_y);
 
     ///
     /// @bried return the index of cost map
@@ -273,11 +248,7 @@ class PotentialFieldCostMap
     bool cell_size_y_odd_; 
     int* cost_map_;
     nav_msgs::GridCells last_costmap_received_;
-    //grid map 
-    double grid_resolution_;
-    int grid_size_x_;
-    int grid_size_y_;
-    int* grid_map_;
+
     //potential field
     int step_value_;
     int warn_value_;    

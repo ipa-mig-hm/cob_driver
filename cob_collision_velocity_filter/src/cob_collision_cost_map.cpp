@@ -12,7 +12,6 @@ FootPrintLine::~FootPrintLine(){
 PotentialFieldCostMap::PotentialFieldCostMap()
 { 
   costmap_received_=false;
-  grid_map_ = NULL;
   cost_map_ = NULL;
 }
 
@@ -125,7 +124,7 @@ bool PotentialFieldCostMap::collisionByTranslation(const geometry_msgs::Vector3&
 }
 
 
-//reads the robot footprint and calculate the related cells of the footprint
+//reads the robot footprint and computes the cells occupied by the footprint in the potential field costmap
 void PotentialFieldCostMap::getFootPrintCells(const std::vector<geometry_msgs::Point>& footprint){
   //calculate the slope of the lines
   int line_num = footprint.size();
@@ -255,7 +254,7 @@ void PotentialFieldCostMap::initial(){
   cell_size_y_ = map_height_ / resolution_;
   step_value_  = max_potential_value_ / ((influence_radius_ / resolution_) - 1);
   forbidden_value_ = max_potential_value_ - int(stop_threshold_ / resolution_) * step_value_;
-  warn_value_ = max_potential_value_ - ((influence_radius_ * 2/3 ) / resolution_) * step_value_;
+  warn_value_ = max_potential_value_ - ((influence_radius_ *2/3) / resolution_) * step_value_;
 
   ROS_INFO("cell_size_x_= %d cell_size_y_= %d",cell_size_x_, cell_size_y_);
   ROS_INFO("max_potential_value is %d",max_potential_value_);
@@ -365,11 +364,6 @@ int PotentialFieldCostMap::getCircleCellValue(int x, int y){
 }
 
 
-void PotentialFieldCostMap::deleteGridMap(){
-  delete[] grid_map_; 
-}
-
-
 void PotentialFieldCostMap::initCostMap(){ 
   cost_map_ = new int[cell_size_x_*cell_size_y_];
   memset(cost_map_,0,cell_size_x_*cell_size_y_*sizeof(int));  
@@ -381,13 +375,6 @@ void PotentialFieldCostMap::deleteCostMap(){
 }
 
 
-int PotentialFieldCostMap::getGridIndex(int grid_x, int grid_y){
-  if((grid_x>=0)&&(grid_x<grid_size_x_)&&(grid_y>=0)&&(grid_y<grid_size_y_))
-  return grid_y * grid_size_x_ + grid_x;
-  else {
-    return -1;
-  }
-}
 
 int PotentialFieldCostMap::getCellIndex(int cell_x,int cell_y){
   if((cell_x>=0)&&(cell_x<cell_size_x_)&&(cell_y>=0)&&(cell_y<cell_size_y_))
@@ -396,8 +383,6 @@ int PotentialFieldCostMap::getCellIndex(int cell_x,int cell_y){
     return -1;
   } 
 }
-
-
 
 
 
@@ -478,8 +463,7 @@ void PotentialFieldCostMap::setRelatedLine(const geometry_msgs::Vector3& cmd_vel
   5 -- south east
   6 -- south west
   7 -- north west*/
-   
- 
+    
   int vel_type=-1;
   if(cmd_vel.x==0&&cmd_vel.y>0)      vel_type = 0;
   else if(cmd_vel.x==0&&cmd_vel.y<0) vel_type = 2;
@@ -571,37 +555,4 @@ void PotentialFieldCostMap::findClosestLine(){
 }
 
 
-//initialize the gridmap
-void PotentialFieldCostMap::initGridMap(){
-  grid_map_ = new int[grid_size_x_*grid_size_y_];
-  memset(grid_map_,0,grid_size_x_*grid_size_y_*sizeof(int));  
-}
-
-//Costmap can be filled into Gridmap which has smaller resolution
-void PotentialFieldCostMap::getGridMap(const nav_msgs::GridCells& last_costmap_received){
-  //index of gridMap
-  int grid_x=0;
-  int grid_y=0;
-  //index of costMap
-  int cell_x=0;
-  int cell_y=0;
-  double map_w = (cell_size_x_-1) * resolution_;
-  double map_h = (cell_size_y_-1) * resolution_; 
-  if(last_costmap_received.cells.size()!=0) costmap_received_ = true;
-  if(!costmap_received_)ROS_WARN("No costmap is received!");
-  if(costmap_received_){
-    int zoom_in = resolution_ / grid_resolution_;
-    for(unsigned int i=0;i<last_costmap_received.cells.size();i++){
-      cell_x = (last_costmap_received.cells[i].x + map_w/2) / resolution_;
-      cell_y = (last_costmap_received.cells[i].y + map_h/2) / resolution_; 
-      for(int j=0;j<zoom_in;j++){
-        for(int k=0;k<zoom_in;k++){
-          grid_x = cell_x * zoom_in + j;
-          grid_y = cell_y * zoom_in + k;
-          grid_map_[getGridIndex(grid_x,grid_y)] = max_potential_value_;
-	}
-      }     	  
-    }
-  } 
-}
 

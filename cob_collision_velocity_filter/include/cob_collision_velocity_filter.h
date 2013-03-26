@@ -159,27 +159,21 @@ class CollisionVelocityFilter
     /* core functions */
     
     ///
-    /// @brief  checks distance to obstacles in driving direction and slows down/stops 
-    ///         robot and publishes command velocity to robot
+    /// @brief  publishes command velocity to robot based on the value of the related footprint cells 
     ///
     void performControllerStep();
 
-
-    void performControllerStepNew(); 
-   
-    ///
-    /// @brief  checks for obstacles in driving direction of the robot (rotation included) 
-    ///         and publishes relevant obstacles
-    ///
-    void obstacleHandler();
+ 
 
     /// 
-    /// @brief initializes and generates the potential filed cost map and publishes the 
-    ///        forbidden area and warn area of the potential field
+    /// @brief  initializes and generates the potential field cost map,the forbidden area, the warm area
+    //          and publishes the forbidden area and warn area
+    //
     void generatePotentialField();
 
     ///
-    /// @brief check if footprint will enter the forbidden area after the incoming command
+    /// @brief check if footprint will enter the forbidden area with the incoming velocity command
+    ///
     bool collisionPreCalculate();
 
 
@@ -191,7 +185,14 @@ class CollisionVelocityFilter
     ///
     std::vector<geometry_msgs::Point> loadRobotFootprint(ros::NodeHandle node);
 
+    ///
+    /// @brief  computes the new velocity after rotation
+    /// @param  rotate angle - the angle to rotate
+    /// @param  robot_twist_linear - the velocity command  
+    /// @param  vel_angle,vel_length - the arctangent angle and the length of the velocity before rotation 
+    ///
     void modifyCommand(double rotate_angle,geometry_msgs::Vector3& robot_twist_linear,double vel_angle,double vel_length);
+   
     ///
     /// @brief  returns the sign of x
     ///
@@ -220,11 +221,9 @@ class CollisionVelocityFilter
 
     //obstacle avoidence
     std::vector<geometry_msgs::Point> robot_footprint_;
-    double footprint_left_, footprint_right_, footprint_front_, footprint_rear_;
-    double footprint_left_initial_, footprint_right_initial_, footprint_front_initial_, footprint_rear_initial_;
     bool costmap_received_;
     nav_msgs::GridCells last_costmap_received_;
-    double influence_radius_, stop_threshold_, use_circumscribed_threshold_;
+    double influence_radius_, stop_threshold_;
     double closest_obstacle_dist_, closest_obstacle_angle_;
 
     //BUT velocity limited marker
