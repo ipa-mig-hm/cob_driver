@@ -177,6 +177,7 @@ class PotentialFieldCostMap
     ///        and the start angle and end angle of the closest line
     ///
     void findClosestLine();
+
         
     nav_msgs::GridCells potential_field_forbidden_;
     nav_msgs::GridCells potential_field_warn_;
@@ -188,7 +189,8 @@ class PotentialFieldCostMap
     double map_height_;
     int max_potential_value_;
     int forbidden_value_;
-    
+   
+ 
 
   private: 
 

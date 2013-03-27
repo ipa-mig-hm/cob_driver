@@ -314,7 +314,6 @@ CollisionVelocityFilter::dynamicReconfigureCB(const cob_collision_velocity_filte
 void CollisionVelocityFilter::performControllerStep() {
 
   if(max_warn_value_ == potential_field_.max_potential_value_) ROS_WARN("find footprint inside the obstacle!");
-  ROS_INFO("the max potential value is %d",max_warn_value_);
   
   geometry_msgs::Twist cmd_vel;
   cmd_vel.angular = robot_twist_angular_; 
@@ -332,8 +331,6 @@ void CollisionVelocityFilter::performControllerStep() {
 void CollisionVelocityFilter::stopMovement() {
   geometry_msgs::Twist stop_twist;
   ROS_INFO("cannot move anymore");
-  max_warn_value_ =  potential_field_.findWarnValue(robot_twist_linear_);
-  ROS_INFO("max warn value is %d",max_warn_value_);
   stop_twist.linear.x = 0.0f; stop_twist.linear.y = 0.0f; stop_twist.linear.z = 0.0f;
   stop_twist.angular.x = 0.0f; stop_twist.angular.y = 0.0f; stop_twist.linear.z = 0.0f;
   topic_pub_command_.publish(stop_twist);

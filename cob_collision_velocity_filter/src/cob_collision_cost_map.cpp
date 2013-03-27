@@ -61,7 +61,7 @@ void PotentialFieldCostMap::cellPFLinearGeneration(){
 
 
 //check if collision will happen when rotates, right now 4.5 and 9 degree rotation is used. larger degree can be added
-//to avoid fasetr rotation
+//to avoid faseter rotation
 bool PotentialFieldCostMap::collisionByRotation(double& angular,const std::vector<geometry_msgs::Point>& footprint){
   getFootPrintCells(footprint);
 
@@ -550,9 +550,11 @@ void PotentialFieldCostMap::findClosestLine(){
     if(closest_line_orth_angle_<closest_line_start_angle||closest_line_orth_angle_>closest_line_end_angle) 
     ROS_WARN("closest line orth angle is out of rage");
   } 
- // ROS_INFO("the closest line number is %d",closest_line_num_);
- // ROS_INFO("max potential field value is %d on (%d,%d)",cell_potential_field_max,index_x_max,index_y_max);
 }
+
+
+
+
 
 
 
